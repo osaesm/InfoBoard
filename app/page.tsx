@@ -1,94 +1,53 @@
 import Image from 'next/image'
 import styles from './page.module.css'
+import dotenv from 'dotenv';
+import { existsSync } from 'fs';
+import { readFile, writeFile } from 'fs/promises';
+import { ReactElement, JSXElementConstructor, ReactNode, ReactPortal, PromiseLikeOfReactNode } from 'react';
+
+dotenv.config();
+
+async function getTransit() {
+  try {
+    let stopNames: { [id: string]: string; } = {}
+    if (!existsSync('localStops.json')) {
+      const stopRes = await fetch(
+        `http://api.pugetsound.onebusaway.org/api/where/stops-for-location.json?key=${process.env.OBA_KEY}&lat=${process.env.LATITUDE}&lon=${process.env.LONGITUDE}&radius=${150}`
+      );
+      await new Promise(resolve => setTimeout(resolve, 10000))
+      const stops = await stopRes.json().then(d => d['data']['list']);
+      for (const currStop of stops) {
+        stopNames[currStop['id']] = currStop['name'];
+      }
+      await writeFile('localStops.json', JSON.stringify(stopNames)).catch(err => {
+        console.log(err);
+      });
+    } else {
+      stopNames = await readFile('localStops.json', 'utf-8').then((x) => JSON.parse(x));
+    }
+    console.log(stopNames)
+    const arrivalsRes = await fetch(
+      `http://api.pugetsound.onebusaway.org/api/where/arrivals-and-departures-for-location.json?key=${process.env.OBA_KEY}&lat=${process.env.LATITUDE}&lon=${process.env.LONGITUDE}&latSpan=${0.0075}&lonSpan=${0.0075}`
+    )
+    await new Promise(resolve => setTimeout(resolve, 10000));
+    const arrivals = await arrivalsRes.json().then(d => d['data']['entry']['arrivalsAndDepartures'].filter((arrival: {[id: string]: string}) => stopNames.keys().includes(arrival['stopId'])));
+    await writeFile('currentArrivals.json', JSON.stringify(arrivals, null, 2));
+    console.log(arrivals);
+    return arrivals['entry']['arrivalsAndDepartures'];
+  } catch (err) {
+    console.error(err);
+    return ''
+  }
+}
 
 export default function Home() {
   return (
-    <main className={styles.main}>
-      <div className={styles.description}>
-        <p>
-          Get started by editing&nbsp;
-          <code className={styles.code}>app/page.tsx</code>
-        </p>
-        <div>
-          <a
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{' '}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className={styles.vercelLogo}
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
-        </div>
-      </div>
-
-      <div className={styles.center}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
-
-      <div className={styles.grid}>
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Docs <span>-&gt;</span>
-          </h2>
-          <p>Find in-depth information about Next.js features and API.</p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Learn <span>-&gt;</span>
-          </h2>
-          <p>Learn about Next.js in an interactive course with&nbsp;quizzes!</p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Templates <span>-&gt;</span>
-          </h2>
-          <p>Explore starter templates for Next.js.</p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Deploy <span>-&gt;</span>
-          </h2>
-          <p>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
+    <main>
+      <div>
+        {
+          getTransit().then(stops => stops.map((currStop: [JSON], idx: number) => (
+            <p key={idx}>{currStop['stopId']}</p>
+          )))}
       </div>
     </main>
   )
