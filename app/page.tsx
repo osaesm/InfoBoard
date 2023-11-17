@@ -50,9 +50,25 @@ async function getWeather() {
     );
     await sleep(1000);
     const data = await res.json().then(d => d['properties']);
-    await writeFile('weatherData.json', JSON.stringify(data, null, 2));
-    const forecastData = await fetch(data['forecast']);
-    console.log(await forecastData.json());
+    const forecastRes = await fetch(data['forecastHourly']);
+    const forecastData = await forecastRes.json();
+    await writeFile('forecastData.json', JSON.stringify(forecastData, null, 2));
+    const formattedForecast = [];
+    for (const fc of forecastData['properties']['periods']) {
+      formattedForecast.push({
+        'number': fc.number,
+        'startTime': fc.startTime,
+        'endTime': fc.endTIme,
+        'temperature': fc.temperature,
+        'temperatureUnit': fc.temperatureUnit,
+        'precipitationProbability': fc.probabilityOfPreciptation.value,
+        'humidity': fc.relativeHumidity.value,
+        'windSpeed': fc.windSpeed,
+        'windDirection': fc.windDirection,
+        'icon': fc.icon,
+        'shortForecast': fc.shortForecast
+      })
+    }
   } catch (err) {
     console.error(err);
   }
