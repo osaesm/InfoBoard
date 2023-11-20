@@ -7,6 +7,28 @@ import { ReactElement, JSXElementConstructor, ReactNode, ReactPortal, PromiseLik
 
 dotenv.config();
 
+interface arrivalJSON {
+  predictedDepartureTime: number,
+  scheduledDepartureTime: number,
+  stopId: string,
+}
+
+interface formattedArrivalJSON {
+  blockTripSequence: number,
+  lastUpdateTime: string,
+  numberOfStopsAway: number,
+  predicted: boolean,
+  predictedArrivalTime: string,
+  predictedDepartureTime: string,
+  routeShortName: string,
+  scheduledArrivalTime: string,
+  scheduledDepartureTime: string,
+  stopId: string,
+  stopSequence: number,
+  tripHeadsign: string,
+  tripStatus: JSON,
+}
+
 async function sleep(ms: number) {
   return await new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -18,8 +40,8 @@ async function getTransit() {
       const stopRes = await fetch(
         `http://api.pugetsound.onebusaway.org/api/where/stops-for-location.json?key=${process.env.OBA_KEY}&lat=${process.env.LATITUDE}&lon=${process.env.LONGITUDE}&radius=${150}`,
         { cache: 'no-cache' }
-        );
-      await sleep(10*1000);
+      );
+      await sleep(10 * 1000);
       const stops = await stopRes.json().then(d => d['data']['list']);
       for (const currStop of stops) {
         stopNames[currStop['id']] = currStop['name'];
@@ -30,19 +52,55 @@ async function getTransit() {
     } else {
       stopNames = await readFile('localStops.json', 'utf-8').then((x) => JSON.parse(x));
     }
-    console.log(stopNames)
+    // console.log(stopNames)
     const arrivalsRes = await fetch(
-      `http://api.pugetsound.onebusaway.org/api/where/arrivals-and-departures-for-location.json?key=${process.env.OBA_KEY}&lat=${process.env.LATITUDE}&lon=${process.env.LONGITUDE}&latSpan=${0.0075}&lonSpan=${0.0075}`,
+      `http://api.pugetsound.onebusaway.org/api/where/arrivals-and-departures-for-location.json?key=${process.env.OBA_KEY}&lat=${process.env.LATITUDE}&lon=${process.env.LONGITUDE}&latSpan=${0.01}&lonSpan=${0.01}`,
       { cache: 'no-cache' }
     )
-    await sleep(10*1000);
-    const arrivals = await arrivalsRes.json().then(d => d['data']['entry']['arrivalsAndDepartures'].filter((arrival: {[id: string]: string}) => Object.keys(stopNames).includes(arrival['stopId'])));
+    await sleep(10 * 1000);
+    const arrivals = await arrivalsRes.json().then(d => d['data']['entry']['arrivalsAndDepartures'].filter((arrival: arrivalJSON) => {
+      return Object.keys(stopNames).includes(arrival.stopId) && ((arrival.scheduledDepartureTime - Date.now()) < 60*60*1000)
+    }));
     await writeFile('currentArrivals.json', JSON.stringify(arrivals, null, 2));
-    return arrivals;
+    const formattedArrivals = [];
+    const hoursMinutes = (x: string) => {
+      return new Date(x).toLocaleTimeString(undefined, {
+        hour: 'numeric',
+        minute: 'numeric',
+        hour12: true,
+      })
+    };
+    for (const arrival of arrivals) {
+      formattedArrivals.push(
+        {
+          'blockTripSequence': arrival.blockTripSequence,
+          'lastUpdateTime': hoursMinutes(arrival.lastUpdateTime),
+          'numberOfStopsAway': arrival.numberOfStopsAway,
+          'predicted': arrival.predicted,
+          'predictedArrivalTime': hoursMinutes(arrival.predictedArrivalTime),
+          'predictedDepartureTime': hoursMinutes(arrival.predictedDepartureTime),
+          'routeShortName': arrival.routeShortName,
+          'scheduledArrivalTime': hoursMinutes(arrival.scheduledArrivalTime),
+          'scheduledDepartureTime': hoursMinutes(arrival.scheduledDepartureTime),
+          'stopId': arrival.stopId,
+          'stopSequence': arrival.stopSequence,
+          'tripHeadsign': arrival.tripHeadsign,
+          'tripStatus': arrival.tripStatus,
+        }
+      )
+    }
+    const sortedArrivals = formattedArrivals.sort((a: { [id: string]: any }, b: { [id: string]: any }) => {
+      if (a.predictedDepartureTime <= b.predictedDepartureTime) {
+        return -1;
+      }
+      return 1;
+    });
+    await writeFile('formattedArrivals.json', JSON.stringify(sortedArrivals, null, 2));
+    return sortedArrivals;
   } catch (err) {
     console.error(err);
-    return {}
   }
+  return [];
 }
 
 async function getWeather() {
@@ -61,17 +119,17 @@ async function getWeather() {
     const forecastData = await forecastRes.json();
     await writeFile('forecastData.json', JSON.stringify(forecastData, null, 2));
     const formattedForecast = [];
+    const justHour = (x: string) => {
+      new Date(x).toLocaleTimeString(undefined, {
+        hour: 'numeric',
+        hour12: true,
+      })
+    };
     for (const fc of forecastData['properties']['periods']) {
       formattedForecast.push({
         'number': fc.number,
-        'startTime': new Date(fc.startTime).toLocaleTimeString(undefined, {
-          hour: 'numeric',
-          hour12: true,
-        }),
-        'endTime': new Date(fc.startTime).toLocaleTimeString(undefined, {
-          hour: 'numeric',
-          hour12: true,
-        }),
+        'startTime': justHour(fc.startTime),
+        'endTime': justHour(fc.endTime),
         'temperature': fc.temperature,
         'temperatureUnit': fc.temperatureUnit,
         'precipitationProbability': fc.probabilityOfPrecipitation.value,
@@ -93,13 +151,11 @@ export default function Home() {
   return (
     <main>
       <div>
-        {/* {
-          getTransit().then(stops => stops.map((currStop: {[idx: string]: string}, idx: number) => (
-            <p key={idx}>{currStop['stopId']}</p>
-          )))} */}
-          {
-            <div>Test {getWeather()}</div>
-          }
+        {/* <div>Test Transit {getTransit()}</div> */}
+        {/* <div>Test Weather {getWeather()}</div> */}
+        {getTransit().then(transitData => transitData.map((a: formattedArrivalJSON, i: number) => {
+          return <div key={i}>The {a.routeShortName} to {a.tripHeadsign} is leaving at {a.predictedDepartureTime}</div>
+        }))}
       </div>
     </main>
   )
