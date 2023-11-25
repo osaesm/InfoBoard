@@ -2,7 +2,7 @@
 
 // import dotenv from 'dotenv';
 // import { writeFile } from 'fs/promises';
-import './page.module.css';
+import styles from './page.module.css';
 import { useEffect, useState } from 'react';
 // import { useEffect, useState } from 'react';
 
@@ -160,7 +160,7 @@ export default function Home() {
   return (
     <main>
       <div suppressHydrationWarning>
-        {(isBusy || !transitData) ? <div>Loading...</div> : <table className="transitTable"><tbody>
+        {(isBusy || !transitData) ? <div>Loading...</div> : <table className={styles.transitTable}><tbody>
           {transitData.map((a: formattedArrivalJSON, i: number) => {
             return <tr key={i}>
               <td>{a.routeShortName}</td>
