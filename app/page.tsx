@@ -42,7 +42,7 @@ async function getWeather() {
         cache: 'no-cache',
       }
     );
-    await sleep(1000);
+    // await sleep(1000);
     const data = await res.json().then(d => d['properties']);
     console.log(data['forecastHourly']);
     const forecastRes = await fetch(
@@ -93,14 +93,12 @@ export default function Home() {
   const getTransit = async () => {
     try {
       let stopNames: { [id: string]: string; } = {}
-      const stopRes = await fetch(
+      const stops = await fetch(
         `http://api.pugetsound.onebusaway.org/api/where/stops-for-location.json?key=${process.env.NEXT_PUBLIC_OBA_KEY}&lat=${process.env.NEXT_PUBLIC_LATITUDE}&lon=${process.env.NEXT_PUBLIC_LONGITUDE}&radius=${150}`,
         {
           cache: 'no-cache',
         }
-      );
-      await sleep(10 * 1000);
-      const stops = await stopRes.json().then(d => d['data']['list']);
+      ).then(async stopRes => await stopRes.json()).then(d => d['data']['list']);
       for (const currStop of stops) {
         stopNames[currStop['id']] = currStop['name'];
       }
@@ -111,7 +109,7 @@ export default function Home() {
           cache: 'no-cache',
         }
       )
-      await sleep(10 * 1000);
+      // await sleep(10 * 1000);
       const arrivals = await arrivalsRes.json().then(d => d['data']['entry']['arrivalsAndDepartures'].filter((arrival: arrivalJSON) => {
         return Object.keys(stopNames).includes(arrival.stopId) && ((arrival.scheduledDepartureTime - Date.now()) < 60 * 60 * 1000) && ((Date.now() - arrival.predictedDepartureTime) <= 5*60*1000)
       }));
