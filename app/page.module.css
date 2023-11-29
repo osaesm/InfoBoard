@@ -1,6 +1,7 @@
 table.transitTable {
   border: 1px solid #1C6EA4;
-  width: 100%;
+  width: 50%;
+  float: left;
   text-align: left;
 }
 table.transitTable td, table.transitTable th {
@@ -13,7 +14,13 @@ table.transitTable tbody td {
 table.transitTable tr:nth-child(even) {
   background: #90F3B5;
 }
-table.transitTable thead {
+
+table.weatherTable {
+  width: 50%;
+  float: inline-end;
+  text-align: left;
+}
+/* table.transitTable thead {
   background: #4EC57A;
   background: -moz-linear-gradient(top, #7ad39b 0%, #5fca87 66%, #4EC57A 100%);
   background: -webkit-linear-gradient(top, #7ad39b 0%, #5fca87 66%, #4EC57A 100%);
@@ -28,9 +35,9 @@ table.transitTable thead th {
 }
 table.transitTable thead th:first-child {
   border-left: none;
-}
+} */
 
-table.transitTable tfoot td {
+/* table.transitTable tfoot td {
   font-size: 14px;
 }
 table.transitTable tfoot .links {
@@ -42,4 +49,4 @@ table.transitTable tfoot .links a{
   color: #FFFFFF;
   padding: 2px 8px;
   border-radius: 5px;
-}
+} */
