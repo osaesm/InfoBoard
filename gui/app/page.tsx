@@ -62,6 +62,7 @@ export default function Home() {
   });
     getWeather();
   }, []);
+  
   const getTransit = async (stopNames: { [id: string]: string }) => {
     try {
       if (Object.keys(stopNames).length === 0) {
