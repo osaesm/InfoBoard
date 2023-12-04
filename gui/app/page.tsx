@@ -50,25 +50,25 @@ export default function Home() {
 
   const [weatherData, setWeatherData] = useState<formattedWeatherJSON[]>();
   const [weatherBusy, setWeatherBusy] = useState<boolean>(true);
-  useEffect(() => { 
+  useEffect(() => {
     getTransit({
-      1_11060: 'Broadway & E Denny Way',
-      1_11175: 'Broadway And Denny',
-      1_11180: 'Broadway  E & E John St',
-      1_29262: 'E John St & 10th Ave E',
-      1_29270: 'E John St & Broadway  E',
-      40_99603: 'Capitol Hill',
-      40_99610: 'Capitol Hill'
-  });
+      '1_11060': 'Broadway & E Denny Way',
+      '1_11175': 'Broadway And Denny',
+      '1_11180': 'Broadway  E & E John St',
+      '1_29262': 'E John St & 10th Ave E',
+      '1_29270': 'E John St & Broadway  E',
+      '40_99603': 'Capitol Hill',
+      '40_99610': 'Capitol Hill'
+    });
     getWeather();
   }, []);
-  
+
   const getTransit = async (stopNames: { [id: string]: string }) => {
     try {
       if (Object.keys(stopNames).length === 0) {
-        let stopNames: {[id: string]: string} = {};
-        const stops: [{[id: string]: string }]= await fetch(
-          `http://api.pugetsound.onebusaway.org/api/where/stops-for-location.json?key=${process.env.NEXT_PUBLIC_OBA_KEY}&lat=${process.env.NEXT_PUBLIC_LATITUDE}&lon=${process.env.NEXT_PUBLIC_LONGITUDE}&radius=${150}`,
+        let stopNames: { [id: string]: string } = {};
+        const stops: [{ [id: string]: string }] = await fetch(
+          `http://localhost:2384/api/where/stops-for-location.json?key=${process.env.NEXT_PUBLIC_OBA_KEY}&lat=${process.env.NEXT_PUBLIC_LATITUDE}&lon=${process.env.NEXT_PUBLIC_LONGITUDE}&radius=${150}`,
           {
             cache: 'no-cache',
           }
@@ -80,13 +80,13 @@ export default function Home() {
         console.log(stopNames);
       }
       const arrivals = await fetch(
-        `http://api.pugetsound.onebusaway.org/api/where/arrivals-and-departures-for-location.json?key=${process.env.NEXT_PUBLIC_OBA_KEY}&lat=${process.env.NEXT_PUBLIC_LATITUDE}&lon=${process.env.NEXT_PUBLIC_LONGITUDE}&latSpan=${0.01}&lonSpan=${0.01}`,
+        `http://localhost:2384/api/where/arrivals-and-departures-for-location.json?key=${process.env.NEXT_PUBLIC_OBA_KEY}&lat=${process.env.NEXT_PUBLIC_LATITUDE}&lon=${process.env.NEXT_PUBLIC_LONGITUDE}&latSpan=${0.01}&lonSpan=${0.01}`,
         {
           cache: 'no-cache',
         }
-      ).then(async arrivalsRes => await arrivalsRes.json()).then(d => d['data']['entry']['arrivalsAndDepartures'].filter((arrival: arrivalJSON) => {
-        return Object.keys(stopNames).includes(arrival.stopId) && ((arrival.scheduledDepartureTime - Date.now()) < 60 * 60 * 1000) && ((Date.now() - arrival.predictedDepartureTime) <= 5 * 60 * 1000)
-      }));
+      ).then(async arrivalsRes => await arrivalsRes.json()).then(d => {
+        return d['entry']['arrivalsAndDepartures'].filter((arrival: arrivalJSON) => Object.keys(stopNames).includes(arrival.stopId) && ((arrival.scheduledDepartureTime - Date.now()) <= 60 * 60 * 1000) && ((Date.now() - arrival.predictedDepartureTime) <= 5 * 60 * 1000))
+      });
       const formattedArrivals: formattedArrivalJSON[] = [];
       const hoursMinutes = (x: string) => {
         return new Date(x).toLocaleTimeString(undefined, {
@@ -176,6 +176,7 @@ export default function Home() {
       console.error(err);
     }
   }
+
   return (
     <main>
       <div suppressHydrationWarning>
@@ -197,8 +198,8 @@ export default function Home() {
               <td>Chance of rain is {b.precipitationProbability}%</td>
               <td><Image
                 alt={b.shortForecast}
-                width={100}
-                height={100}
+                width={50}
+                height={50}
                 src={b.icon} />
               </td>
             </tr>
