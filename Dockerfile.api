@@ -1,0 +1,9 @@
+FROM node:20.6
+WORKDIR /usr/src/app
+COPY api/package*.json ./api/
+RUN cd api && npm i && npm install cors
+COPY api/server.js ./api/
+
+EXPOSE 2384
+
+CMD ["node", "./api/server.js"]

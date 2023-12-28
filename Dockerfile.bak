@@ -1,0 +1,14 @@
+FROM node:20.6 AS ui-build
+WORKDIR /usr/src/app
+COPY gui ./gui/
+RUN cd gui && npm i && npm run build && cd ..
+
+COPY api/package*.json ./api/
+RUN cd api && npm i
+COPY api/server.js ./api/
+
+EXPOSE 2384
+EXPOSE 3000
+
+CMD ["node", "./api/server.js"]
+

@@ -50,6 +50,7 @@ export default function Home() {
 
   const [weatherData, setWeatherData] = useState<formattedWeatherJSON[]>();
   const [weatherBusy, setWeatherBusy] = useState<boolean>(true);
+
   useEffect(() => {
     getTransit({
       '1_11060': 'Broadway & E Denny Way',
@@ -68,7 +69,7 @@ export default function Home() {
       if (Object.keys(stopNames).length === 0) {
         let stopNames: { [id: string]: string } = {};
         const stops: [{ [id: string]: string }] = await fetch(
-          `http://localhost:2384/api/where/stops-for-location.json?key=${process.env.NEXT_PUBLIC_OBA_KEY}&lat=${process.env.NEXT_PUBLIC_LATITUDE}&lon=${process.env.NEXT_PUBLIC_LONGITUDE}&radius=${150}`,
+          `http://osamaserver:2384/api/where/stops-for-location.json?key=${process.env.NEXT_PUBLIC_OBA_KEY}&lat=${process.env.NEXT_PUBLIC_LATITUDE}&lon=${process.env.NEXT_PUBLIC_LONGITUDE}&radius=${150}`,
           {
             cache: 'no-cache',
           }
@@ -80,12 +81,12 @@ export default function Home() {
         console.log(stopNames);
       }
       const arrivals = await fetch(
-        `http://localhost:2384/api/where/arrivals-and-departures-for-location.json?key=${process.env.NEXT_PUBLIC_OBA_KEY}&lat=${process.env.NEXT_PUBLIC_LATITUDE}&lon=${process.env.NEXT_PUBLIC_LONGITUDE}&latSpan=${0.01}&lonSpan=${0.01}`,
+        `http://osamaserver:2384/api/where/arrivals-and-departures-for-location.json?key=${process.env.NEXT_PUBLIC_OBA_KEY}&lat=${process.env.NEXT_PUBLIC_LATITUDE}&lon=${process.env.NEXT_PUBLIC_LONGITUDE}&latSpan=${0.01}&lonSpan=${0.01}`,
         {
           cache: 'no-cache',
         }
       ).then(async arrivalsRes => await arrivalsRes.json()).then(d => {
-        return d['entry']['arrivalsAndDepartures'].filter((arrival: arrivalJSON) => Object.keys(stopNames).includes(arrival.stopId) && ((arrival.scheduledDepartureTime - Date.now()) <= 60 * 60 * 1000) && ((Date.now() - arrival.predictedDepartureTime) <= 5 * 60 * 1000))
+        return d['data']['entry']['arrivalsAndDepartures'].filter((arrival: arrivalJSON) => Object.keys(stopNames).includes(arrival.stopId) && ((arrival.scheduledDepartureTime - Date.now()) <= 60 * 60 * 1000) && ((Date.now() - arrival.predictedDepartureTime) <= 5 * 60 * 1000))
       });
       const formattedArrivals: formattedArrivalJSON[] = [];
       const hoursMinutes = (x: string) => {
