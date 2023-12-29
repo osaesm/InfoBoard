@@ -139,7 +139,7 @@ export default function Home() {
       const weatherBaseUrl = 'https://api.weather.gov'
       // console.log(data['forecastHourly']);
 
-      await sleep(5*1000);
+      await sleep(10*1000);
       const forecastData = await fetch(
         `http://osamaserver:2384/weather${data['forecastHourly'].substring(weatherBaseUrl.length)}`,
         {

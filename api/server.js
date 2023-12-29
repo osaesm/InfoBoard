@@ -7,7 +7,6 @@ const port = 2384
 app.get('/transit*', cors(), async (req, res, next) => {
   const transitBaseUrl = 'http://api.pugetsound.onebusaway.org'
   res.status(200).json(await fetch(`${transitBaseUrl}${req.url.substring(8)}`).then(async transitRes => {
-    console.log(await transitRes.text)
     return transitRes.json()
   }));
 })
@@ -16,7 +15,6 @@ app.get('/weather*', async (req, res) => {
   const weatherBaseUrl = 'https://api.weather.gov'
   console.log(`${weatherBaseUrl}${req.url.substring(8)}`)
   res.status(200).json(await fetch(`${weatherBaseUrl}${req.url.substring(8)}`).then(async weatherRes => {
-    console.log(await weatherRes.json());
     return weatherRes.json();
   }));
 })
