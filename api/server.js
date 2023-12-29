@@ -13,11 +13,8 @@ app.get('/weather*', async (req, res) => {
   const weatherBaseUrl = 'https://api.weather.gov'
   console.log(`${weatherBaseUrl}${req.url.substring(8)}`)
   return res.status(200).json(await fetch(`${weatherBaseUrl}${req.url.substring(8)}`).then(weatherRes => {
-    try {
-      return weatherRes.json()
-    } catch (err) {
-      return {'error': weatherRes.text};
-    }
+    console.log(weatherRes.text());
+    return weatherRes.json();
   }));
 })
 
