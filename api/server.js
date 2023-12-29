@@ -14,9 +14,7 @@ app.get('/*', async (req, res) => {
     return res.status(200).json(await fetch(`${transitBaseUrl}${req.url.substring(8)}`).then(transitRes => transitRes.json()));
   }
   console.log(`${weatherBaseUrl}${req.url.substring(8)}`)
-  return res.status(200).json(await fetch(`${weatherBaseUrl}${req.url.substring(8)}`).then(async weatherRes => {
-    console.log(await weatherRes.text());
-    return weatherRes.json()
+  return res.status(200).json(await fetch(`${weatherBaseUrl}${req.url.substring(8)}`).then(weatherRes => weatherRes.json())
   }));
 })
 
