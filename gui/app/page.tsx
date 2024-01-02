@@ -61,7 +61,7 @@ export default function Home() {
       '40_99603': 'Capitol Hill',
       '40_99610': 'Capitol Hill'
     });
-    getWeather();
+    getWeather(5);
   }, []);
 
   const getTransit = async (stopNames: { [id: string]: string }) => {
@@ -128,7 +128,7 @@ export default function Home() {
     }
   }
 
-  const getWeather = async () => {
+  const getWeather = async (maxHoursAhead: number) => {
     try {
       const data = await fetch(
         `http://osamaserver:2384/weather/points/${process.env.NEXT_PUBLIC_LATITUDE},${process.env.NEXT_PUBLIC_LONGITUDE}`,
@@ -139,7 +139,7 @@ export default function Home() {
       const weatherBaseUrl = 'https://api.weather.gov'
       // console.log(data['forecastHourly']);
 
-      await sleep(10*1000);
+      await sleep(10 * 1000);
       const forecastData = await fetch(
         `http://osamaserver:2384/weather${data['forecastHourly'].substring(weatherBaseUrl.length)}`,
         {
@@ -156,6 +156,7 @@ export default function Home() {
       };
 
       for (const fc of forecastData['properties']['periods']) {
+        if (fc.number > maxHoursAhead) continue;
         formattedForecast.push({
           number: fc.number,
           startTime: justHour(fc.startTime),
@@ -190,22 +191,32 @@ export default function Home() {
           })}
         </tbody>
         </table>}
-        {(weatherBusy || !weatherData) ? <div>Loading weather...</div> : <table><tbody>
-          {weatherData.map((b: formattedWeatherJSON, k: number) => {
-            return <tr key={k}>
-              <td>{b.startTime}</td>
-              <td>Temperature: {b.temperature}&#176; {b.temperatureUnit}</td>
-              <td>Chance of rain is {b.precipitationProbability}%</td>
-              <td><Image
-                alt={b.shortForecast}
-                width={50}
-                height={50}
-                src={b.icon} />
-              </td>
-            </tr>
-          })}
-        </tbody>
-        </table>}
+        {(weatherBusy || !weatherData) ? <div>Loading weather...</div> : <div className={styles.weatherInfo}>
+          <div className={styles.currentWeather}>
+            <Image
+              alt={weatherData[0].shortForecast}
+              width={500}
+              height={500}
+              src={weatherData[0].icon} />
+            <p>{weatherData[0].temperature}&#176; {weatherData[0].temperatureUnit}</p>
+            <p>Chance of rain is {weatherData[0].precipitationProbability}%</p>
+            <p>{weatherData[0].startTime}</p>
+          </div>
+          <div className={styles.futureWeather}>
+            {[1, 2, 3, 4].map(x => {
+              return <div key={x} className={styles.futureWeatherCard}>
+                <Image
+                  alt={weatherData[x].shortForecast}
+                  width={250}
+                  height={250}
+                  src={weatherData[x].icon} />
+                <p>{weatherData[x].temperature}&#176; {weatherData[x].temperatureUnit}</p>
+                <p>Chance of rain is {weatherData[x].precipitationProbability}%</p>
+                <p>{weatherData[x].startTime}</p>
+              </div>
+            })}
+          </div>
+        </div>}
       </div>
     </main>
   );
