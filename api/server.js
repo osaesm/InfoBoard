@@ -2,7 +2,7 @@ const express = require('express')
 const cors = require('cors')
 
 const app = express()
-const port = 2384
+const port = process.env.PORT_NUMBER;
 
 app.get('/transit*', cors(), async (req, res, next) => {
   const transitBaseUrl = 'http://api.pugetsound.onebusaway.org'

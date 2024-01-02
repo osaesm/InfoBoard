@@ -69,7 +69,7 @@ export default function Home() {
       if (Object.keys(stopNames).length === 0) {
         let stopNames: { [id: string]: string } = {};
         const stops: [{ [id: string]: string }] = await fetch(
-          `http://osamaserver:2384/transit/api/where/stops-for-location.json?key=${process.env.NEXT_PUBLIC_OBA_KEY}&lat=${process.env.NEXT_PUBLIC_LATITUDE}&lon=${process.env.NEXT_PUBLIC_LONGITUDE}&radius=${150}`,
+          `${process.env.NEXT_PUBLIC_HOST_URL}/transit/api/where/stops-for-location.json?key=${process.env.NEXT_PUBLIC_OBA_KEY}&lat=${process.env.NEXT_PUBLIC_LATITUDE}&lon=${process.env.NEXT_PUBLIC_LONGITUDE}&radius=${150}`,
           {
             cache: 'no-cache',
           }
@@ -81,7 +81,7 @@ export default function Home() {
         console.log(stopNames);
       }
       const arrivals = await fetch(
-        `http://osamaserver:2384/transit/api/where/arrivals-and-departures-for-location.json?key=${process.env.NEXT_PUBLIC_OBA_KEY}&lat=${process.env.NEXT_PUBLIC_LATITUDE}&lon=${process.env.NEXT_PUBLIC_LONGITUDE}&latSpan=${0.01}&lonSpan=${0.01}`,
+        `${process.env.NEXT_PUBLIC_HOST_URL}/transit/api/where/arrivals-and-departures-for-location.json?key=${process.env.NEXT_PUBLIC_OBA_KEY}&lat=${process.env.NEXT_PUBLIC_LATITUDE}&lon=${process.env.NEXT_PUBLIC_LONGITUDE}&latSpan=${0.01}&lonSpan=${0.01}`,
         {
           cache: 'no-cache',
         }
@@ -131,7 +131,7 @@ export default function Home() {
   const getWeather = async (maxHoursAhead: number) => {
     try {
       const data = await fetch(
-        `http://osamaserver:2384/weather/points/${process.env.NEXT_PUBLIC_LATITUDE},${process.env.NEXT_PUBLIC_LONGITUDE}`,
+        `${process.env.NEXT_PUBLIC_HOST_URL}/weather/points/${process.env.NEXT_PUBLIC_LATITUDE},${process.env.NEXT_PUBLIC_LONGITUDE}`,
         {
           cache: 'no-cache',
         }
@@ -141,7 +141,7 @@ export default function Home() {
 
       await sleep(10 * 1000);
       const forecastData = await fetch(
-        `http://osamaserver:2384/weather${data['forecastHourly'].substring(weatherBaseUrl.length)}`,
+        `${process.env.NEXT_PUBLIC_HOST_URL}/weather${data['forecastHourly'].substring(weatherBaseUrl.length)}`,
         {
           cache: 'no-cache',
         }
