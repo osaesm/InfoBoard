@@ -195,8 +195,8 @@ export default function Home() {
           <div className={styles.currentWeather}>
             <Image
               alt={weatherData[0].shortForecast}
-              width={500}
-              height={500}
+              width={250}
+              height={250}
               src={weatherData[0].icon} />
             <p>{weatherData[0].temperature}&#176; {weatherData[0].temperatureUnit}</p>
             <p>Chance of rain is {weatherData[0].precipitationProbability}%</p>
@@ -207,8 +207,8 @@ export default function Home() {
               return <div key={x} className={styles.futureWeatherCard}>
                 <Image
                   alt={weatherData[x].shortForecast}
-                  width={250}
-                  height={250}
+                  width={125}
+                  height={125}
                   src={weatherData[x].icon} />
                 <p>{weatherData[x].temperature}&#176; {weatherData[x].temperatureUnit}</p>
                 <p>Chance of rain is {weatherData[x].precipitationProbability}%</p>
