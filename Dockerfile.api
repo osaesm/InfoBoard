@@ -4,6 +4,6 @@ COPY api/package*.json ./api/
 RUN cd api && npm i
 COPY api/server.js ./api/
 
-EXPOSE 2384
+EXPOSE 2399
 
 CMD ["node", "./api/server.js"]
