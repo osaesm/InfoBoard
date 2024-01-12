@@ -12,14 +12,14 @@ interface arrivalJSON {
 
 interface formattedArrivalJSON {
   blockTripSequence: number,
-  lastUpdateTime: string,
+  lastUpdateTime: number,
   numberOfStopsAway: number,
   predicted: boolean,
-  predictedArrivalTime: string,
-  predictedDepartureTime: string,
+  predictedArrivalTime: number,
+  predictedDepartureTime: number,
   routeShortName: string,
-  scheduledArrivalTime: string,
-  scheduledDepartureTime: string,
+  scheduledArrivalTime: number,
+  scheduledDepartureTime: number,
   stopId: string,
   stopSequence: number,
   tripHeadsign: string,
@@ -45,11 +45,15 @@ async function sleep(ms: number) {
 }
 
 export default function Home() {
+  const refreshInterval = 5 * 60;
+
   const [transitData, setTransitData] = useState<formattedArrivalJSON[]>();
   const [transitBusy, setTransitBusy] = useState<boolean>(true);
 
   const [weatherData, setWeatherData] = useState<formattedWeatherJSON[]>();
   const [weatherBusy, setWeatherBusy] = useState<boolean>(true);
+
+  const [nextRefresh, setNextRefresh] = useState<number>(refreshInterval);
 
   useEffect(() => {
     getTransit({
@@ -62,6 +66,23 @@ export default function Home() {
       '40_99610': 'Capitol Hill'
     });
     getWeather(5);
+    const intervalId = setInterval(() => {
+      setNextRefresh((t) => t - 1);
+      if (nextRefresh == 0) {
+        setNextRefresh(refreshInterval);
+        getTransit({
+          '1_11060': 'Broadway & E Denny Way',
+          '1_11175': 'Broadway And Denny',
+          '1_11180': 'Broadway  E & E John St',
+          '1_29262': 'E John St & 10th Ave E',
+          '1_29270': 'E John St & Broadway  E',
+          '40_99603': 'Capitol Hill',
+          '40_99610': 'Capitol Hill'
+        });
+        getWeather(5);
+      }
+    }, 1000);
+    return () => clearInterval(intervalId);
   }, []);
 
   const getTransit = async (stopNames: { [id: string]: string }) => {
@@ -86,28 +107,21 @@ export default function Home() {
           cache: 'no-cache',
         }
       ).then(async arrivalsRes => await arrivalsRes.json()).then(d => {
-        return d['data']['entry']['arrivalsAndDepartures'].filter((arrival: arrivalJSON) => Object.keys(stopNames).includes(arrival.stopId) && ((arrival.scheduledDepartureTime - Date.now()) <= 60 * 60 * 1000) && ((Date.now() - arrival.predictedDepartureTime) <= 5 * 60 * 1000))
+        return d['data']['entry']['arrivalsAndDepartures'].filter((arrival: arrivalJSON) => Object.keys(stopNames).includes(arrival.stopId) && ((arrival.scheduledDepartureTime - Date.now()) <= 60 * 60 * 1000) && ((Date.now() - arrival.predictedDepartureTime) <= 2 * 60 * 1000))
       });
       const formattedArrivals: formattedArrivalJSON[] = [];
-      const hoursMinutes = (x: string) => {
-        return new Date(x).toLocaleTimeString(undefined, {
-          hour: 'numeric',
-          minute: 'numeric',
-          hour12: true,
-        })
-      };
       for (const arrival of arrivals) {
         formattedArrivals.push(
           {
             blockTripSequence: arrival.blockTripSequence,
-            lastUpdateTime: hoursMinutes(arrival.lastUpdateTime),
+            lastUpdateTime: Math.round(arrival.lastUpdateTime / 1000),
             numberOfStopsAway: arrival.numberOfStopsAway,
             predicted: arrival.predicted,
-            predictedArrivalTime: hoursMinutes(arrival.predictedArrivalTime),
-            predictedDepartureTime: hoursMinutes(arrival.predictedDepartureTime),
+            predictedArrivalTime: Math.round(arrival.predictedArrivalTime / 1000),
+            predictedDepartureTime: Math.round(arrival.predictedDepartureTime / 1000),
             routeShortName: arrival.routeShortName,
-            scheduledArrivalTime: hoursMinutes(arrival.scheduledArrivalTime),
-            scheduledDepartureTime: hoursMinutes(arrival.scheduledDepartureTime),
+            scheduledArrivalTime: Math.round(arrival.scheduledArrivalTime / 1000),
+            scheduledDepartureTime: Math.round(arrival.scheduledDepartureTime / 1000),
             stopId: arrival.stopId,
             stopSequence: arrival.stopSequence,
             tripHeadsign: arrival.tripHeadsign,
@@ -178,15 +192,19 @@ export default function Home() {
     }
   }
 
+  const minutesSeconds = (x: number) => {return x < 60 ? `${x} s` : `${Math.floor(x / 60)} m, ${x % 60} s`}
+
   return (
     <main>
+      <div>Last Refreshed: {refreshInterval-nextRefresh}</div>
+      <div>Refreshing in: {nextRefresh}</div>
       <div suppressHydrationWarning>
         {(transitBusy || !transitData) ? <div>Loading transit...</div> : <table className={styles.transitTable}><tbody>
           {transitData.map((a: formattedArrivalJSON, i: number) => {
             return <tr key={i}>
               <td>{a.routeShortName}</td>
               <td>{a.tripHeadsign}</td>
-              <td>{a.predictedDepartureTime}</td>
+              <td>{minutesSeconds(a.predictedDepartureTime - Math.round(Date.now()/1000))}</td>
             </tr>
           })}
         </tbody>
@@ -199,7 +217,7 @@ export default function Home() {
               height={250}
               src={weatherData[0].icon} />
             <p>{weatherData[0].temperature}&#176; {weatherData[0].temperatureUnit}</p>
-            <p>Chance of rain is {weatherData[0].precipitationProbability}%</p>
+            <p>Chance of {weatherData[0].temperature <= 32 ? 'snow' : 'rain'} is {weatherData[0].precipitationProbability}%</p>
             <p>{weatherData[0].startTime}</p>
           </div>
           <div className={styles.futureWeather}>
@@ -211,7 +229,7 @@ export default function Home() {
                   height={125}
                   src={weatherData[x].icon} />
                 <p>{weatherData[x].temperature}&#176; {weatherData[x].temperatureUnit}</p>
-                <p>Chance of rain is {weatherData[x].precipitationProbability}%</p>
+                <p>Chance of {weatherData[x].temperature <= 32 ? 'snow' : 'rain'} is {weatherData[x].precipitationProbability}%</p>
                 <p>{weatherData[x].startTime}</p>
               </div>
             })}
