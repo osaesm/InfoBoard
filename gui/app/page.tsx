@@ -68,8 +68,10 @@ export default function Home() {
     getWeather(5);
     const intervalId = setInterval(() => {
       setNextRefresh((t) => t - 1);
-      if (nextRefresh == 0) {
+      if (nextRefresh <= 0) {
         setNextRefresh(refreshInterval);
+        setTransitBusy(true);
+        setTransitData([]);
         getTransit({
           '1_11060': 'Broadway & E Denny Way',
           '1_11175': 'Broadway And Denny',
@@ -79,6 +81,8 @@ export default function Home() {
           '40_99603': 'Capitol Hill',
           '40_99610': 'Capitol Hill'
         });
+        setWeatherBusy(true);
+        setWeatherData([]);
         getWeather(5);
       }
     }, 1000);
