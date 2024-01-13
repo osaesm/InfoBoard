@@ -87,7 +87,7 @@ export default function Home() {
       }
     }, 1000);
     return () => clearInterval(intervalId);
-  }, []);
+  }, [nextRefresh]);
 
   const getTransit = async (stopNames: { [id: string]: string }) => {
     try {
@@ -173,6 +173,13 @@ export default function Home() {
         })
       };
 
+      const processIconUrl = (url: string, p: number) => {
+        if (p > 0) {
+          return `${url.split('?')[0]}?size=`
+        }
+        return `${url.split(',')[0]}?size=`;
+      }
+
       for (const fc of forecastData['properties']['periods']) {
         if (fc.number > maxHoursAhead) continue;
         formattedForecast.push({
@@ -185,7 +192,7 @@ export default function Home() {
           humidity: fc.relativeHumidity.value,
           windSpeed: fc.windSpeed,
           windDirection: fc.windDirection,
-          icon: fc.icon,
+          icon: processIconUrl(fc.icon, fc.probabilityOfPrecipitation.value),
           shortForecast: fc.shortForecast
         })
       }
@@ -196,19 +203,19 @@ export default function Home() {
     }
   }
 
-  const minutesSeconds = (x: number) => {return x < 60 ? `${x} s` : `${Math.floor(x / 60)} m, ${x % 60} s`}
+  const minutesSeconds = (x: number) => { return x < 60 ? `${x} s` : `${Math.floor(x / 60)} m, ${x % 60} s` }
 
   return (
     <main>
-      <div>Last Refreshed: {refreshInterval-nextRefresh}</div>
-      <div>Refreshing in: {nextRefresh}</div>
+      <div>Last Refreshed: {minutesSeconds(refreshInterval - nextRefresh)}</div>
+      <div>Refreshing in: {minutesSeconds(nextRefresh)}</div>
       <div suppressHydrationWarning>
         {(transitBusy || !transitData) ? <div>Loading transit...</div> : <table className={styles.transitTable}><tbody>
           {transitData.map((a: formattedArrivalJSON, i: number) => {
             return <tr key={i}>
               <td>{a.routeShortName}</td>
               <td>{a.tripHeadsign}</td>
-              <td>{minutesSeconds(a.predictedDepartureTime - Math.round(Date.now()/1000))}</td>
+              <td>{minutesSeconds(a.predictedDepartureTime - Math.round(Date.now() / 1000))}</td>
             </tr>
           })}
         </tbody>
@@ -219,7 +226,8 @@ export default function Home() {
               alt={weatherData[0].shortForecast}
               width={250}
               height={250}
-              src={weatherData[0].icon} />
+              src={`${weatherData[0].icon}250`}
+              priority />
             <p>{weatherData[0].temperature}&#176; {weatherData[0].temperatureUnit}</p>
             <p>Chance of {weatherData[0].temperature <= 32 ? 'snow' : 'rain'} is {weatherData[0].precipitationProbability}%</p>
             <p>{weatherData[0].startTime}</p>
@@ -231,7 +239,8 @@ export default function Home() {
                   alt={weatherData[x].shortForecast}
                   width={125}
                   height={125}
-                  src={weatherData[x].icon} />
+                  src={`${weatherData[x].icon}125`} 
+                  priority />
                 <p>{weatherData[x].temperature}&#176; {weatherData[x].temperatureUnit}</p>
                 <p>Chance of {weatherData[x].temperature <= 32 ? 'snow' : 'rain'} is {weatherData[x].precipitationProbability}%</p>
                 <p>{weatherData[x].startTime}</p>
