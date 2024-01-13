@@ -14,7 +14,6 @@ app.get('/transit*', cors(), async (req, res, next) => {
 
 app.get('/weather*', cors(), async (req, res, next) => {
   const weatherBaseUrl = 'https://api.weather.gov'
-  console.log(`${weatherBaseUrl}${req.url.substring(8)}`)
   res.status(200).json(await fetch(`${weatherBaseUrl}${req.url.substring(8)}`).then(async weatherRes => {
     return weatherRes.json();
   }));
