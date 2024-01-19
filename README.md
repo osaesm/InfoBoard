@@ -23,4 +23,4 @@
 
 1. To set up the API locally, `cd` into `api/` and run `npm i`
 2. The main code for the api is in `api/server.js`
-3. To run the API locally, from `api/`, run `node server.js`. You also have to make a change to the code in `gui/app/page.tsx`. Replace all references to `http://osamaserver` with `http::localhost`. (Change back before committing / pushing code though).
+3. To run the API locally, from `api/`, run `node server.js`. You also have to make a change to `gui/.env.local` (set `NEXT_PUBLIC_HOST_URL='localhost:<port>'` [default port for API is `2399`])
