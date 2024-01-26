@@ -53,19 +53,9 @@ export default function Home() {
   const [weatherData, setWeatherData] = useState<formattedWeatherJSON[]>();
   const [weatherBusy, setWeatherBusy] = useState<boolean>(true);
 
-  const [nextRefresh, setNextRefresh] = useState<number>(refreshInterval);
+  const [nextRefresh, setNextRefresh] = useState<number>(1);
 
   useEffect(() => {
-    getTransit({
-      '1_11060': 'Broadway & E Denny Way',
-      '1_11175': 'Broadway And Denny',
-      '1_11180': 'Broadway  E & E John St',
-      '1_29262': 'E John St & 10th Ave E',
-      '1_29270': 'E John St & Broadway  E',
-      '40_99603': 'Capitol Hill',
-      '40_99610': 'Capitol Hill'
-    });
-    getWeather(5);
     const intervalId = setInterval(() => {
       setNextRefresh((t) => t - 1);
       if (nextRefresh <= 0) {
