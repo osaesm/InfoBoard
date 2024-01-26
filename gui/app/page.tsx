@@ -167,7 +167,7 @@ export default function Home() {
 
       const formattedForecast: formattedWeatherJSON[] = [];
       const justHour = (x: string) => {
-        return new Date(x).toLocaleTimeString(undefined, {
+        return new Date(x).toLocaleTimeString('en-US', {
           hour: 'numeric',
           hour12: true,
         })
@@ -180,8 +180,14 @@ export default function Home() {
         return `${url.split(',')[0]}?size=`;
       }
 
+      let currHourIdx = 0;
       for (const fc of forecastData['properties']['periods']) {
-        if (fc.number > maxHoursAhead) continue;
+        if (new Date(fc.endTime).valueOf() < Date.now()) {
+          currHourIdx = fc.number
+          console.log(fc.endTime)
+          continue
+        }
+        if (fc.number > (maxHoursAhead + currHourIdx)) continue;
         formattedForecast.push({
           number: fc.number,
           startTime: justHour(fc.startTime),
