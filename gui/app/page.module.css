@@ -12,7 +12,7 @@ table.transitTable tbody td {
   font-size: 40px;
 }
 table.transitTable tr:nth-child(even) {
-  background: #90F3B5;
+  background: #6C6768;
 }
 
 div.weatherInfo {
