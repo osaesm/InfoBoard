@@ -45,7 +45,7 @@ async function sleep(ms: number) {
 }
 
 export default function Home() {
-  const refreshInterval = 5 * 60;
+  const refreshInterval = 2 * 60;
 
   const [transitData, setTransitData] = useState<formattedArrivalJSON[]>();
   const [transitBusy, setTransitBusy] = useState<boolean>(true);
@@ -199,7 +199,7 @@ export default function Home() {
     }
   }
 
-  const minutesSeconds = (x: number) => { return x < 60 ? `${x} s` : `${Math.floor(x / 60)} m, ${x % 60} s` }
+  const minutesSeconds = (x: number) => { return x < 60 ? `${x.toString()} s` : `${Math.floor(x / 60).toString().padStart(2, '0')} m, ${(x % 60).toString().padStart(2, '0')} s` }
 
   return (
     <main>
