@@ -207,7 +207,7 @@ export default function Home() {
       <div>Refreshing in: {minutesSeconds(nextRefresh)}</div>
       <div suppressHydrationWarning>
         {(transitBusy || !transitData) ? <div>Loading transit...</div> : <table className={styles.transitTable}><tbody>
-          {transitData.map((a: formattedArrivalJSON, i: number) => {
+          {transitData.filter((b: formattedArrivalJSON) => b.predictedDepartureTime - Math.round(Date.now() / 1000) > 0).map((a: formattedArrivalJSON, i: number) => {
             return <tr key={i}>
               <td>{a.routeShortName}</td>
               <td>{a.tripHeadsign}</td>

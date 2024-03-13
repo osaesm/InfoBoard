@@ -9,7 +9,7 @@ table.transitTable td, table.transitTable th {
   padding: 3px 2px;
 }
 table.transitTable tbody td {
-  font-size: 40px;
+  font-size: 25px;
 }
 table.transitTable tr:nth-child(even) {
   background: #6C6768;
