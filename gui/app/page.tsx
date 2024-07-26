@@ -164,9 +164,9 @@ export default function Home() {
       };
 
       const processIconUrl = (url: string, p: number) => {
-        if (p > 0) {
-          return `${url.split('?')[0]}?size=`
-        }
+      //  if (p > 0) {
+      //    return `${url.split('?')[0]}?size=`
+      //  }
         return `${url.split(',')[0]}?size=`;
       }
 
