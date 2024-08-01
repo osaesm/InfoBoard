@@ -5,4 +5,4 @@ RUN npm i
 
 EXPOSE 2399
 
-CMD ["node", "./api/server.js"]
+CMD ["node", "server.js"]
