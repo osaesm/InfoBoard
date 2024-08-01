@@ -1,8 +1,7 @@
-FROM node:20.6
+FROM node:20.16
 WORKDIR /usr/src/app
-COPY api/package*.json ./api/
-RUN cd api && npm i
-COPY api/server.js ./api/
+COPY api/* .
+RUN npm i
 
 EXPOSE 2399
 
