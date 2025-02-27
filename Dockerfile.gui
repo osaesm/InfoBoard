@@ -1,9 +1,18 @@
-FROM node:20.16
+FROM node:20.16 AS builder
 WORKDIR /usr/src/app
-COPY gui .
+COPY gui/package*.json ./
 RUN npm ci
+COPY gui .
+RUN npm run build
 
+FROM node:20.16-slim
+WORKDIR /usr/src/app
+# COPY --from=builder /usr/src/app/public ./public
+COPY --from=builder /usr/src/app/.next/ ./.next
+COPY --from=builder /usr/src/app/package*.json ./
+RUN ls . -la
+RUN npm ci --omit=dev
 EXPOSE 3000
 
-CMD ["npm", "run", "dev"]
+CMD ["npm", "start"]
 
