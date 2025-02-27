@@ -1,7 +1,7 @@
 FROM node:20.16
 WORKDIR /usr/src/app
 COPY gui .
-RUN npm i
+RUN npm ci
 
 EXPOSE 3000
 
