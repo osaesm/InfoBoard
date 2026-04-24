@@ -155,7 +155,7 @@ export default function Home() {
                 priority />
               <p>{weatherData[0].temperature}&#176; {weatherData[0].temperatureUnit}</p>
               <p>Chance of {weatherData[0].temperature <= 32 ? 'snow' : 'rain'} is {weatherData[0].precipitationProbability}%</p>
-              <p>{weatherData[0].startTime}</p>
+              <p>{new Date(currTime).toLocaleTimeString()}</p>
             </div>
             <div className={styles.futureWeather}>
               {[1, 2, 3, 4].map(x => {
