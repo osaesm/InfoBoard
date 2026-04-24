@@ -23,25 +23,25 @@ async function sleep(ms: number) {
 }
 
 export default function Home() {
-  const refreshInterval = 2 * 60;
+  const refreshInterval = 60 * 1000;
 
   const [weatherData, setWeatherData] = useState<formattedWeatherJSON[]>();
   const [weatherBusy, setWeatherBusy] = useState<boolean>(true);
 
-  const [nextRefresh, setNextRefresh] = useState<number>(1);
-
+  const [currTime, setCurrTime] = useState<number>(Date.now());
+  const [nextRefresh, setNextRefresh] = useState<number>(currTime + 1000);
   useEffect(() => {
     const intervalId = setInterval(() => {
-      setNextRefresh((t) => t - 1);
-      if (nextRefresh <= 0) {
-        setNextRefresh(refreshInterval);
+      setCurrTime(Date.now());
+      if (currTime > nextRefresh) {
+        setNextRefresh((t) => t + refreshInterval);
         setWeatherBusy(true);
         setWeatherData([]);
         getWeather(5);
       }
     }, 1000);
     return () => clearInterval(intervalId);
-  }, [nextRefresh]);
+  }, [currTime, nextRefresh]);
 
   const getWeather = async (maxHoursAhead: number) => {
     try {
@@ -52,7 +52,6 @@ export default function Home() {
         }
       ).then(async res => await res.json()).then(d => d['properties']);
       const weatherBaseUrl = 'https://api.weather.gov'
-      // console.log(data['forecastHourly']);
 
       await sleep(1000);
       const forecastData = await fetch(
@@ -89,12 +88,10 @@ export default function Home() {
       for (const fc of forecastData['properties']['periods']) {
         if (new Date(fc.endTime).valueOf() < Date.now()) {
           currHourIdx = fc.number
-          console.log(fc.endTime)
           continue
         }
         if (fc.number > (maxHoursAhead + currHourIdx)) continue;
         
-        console.log(processIconUrl(fc.icon));
         formattedForecast.push({
           number: fc.number,
           startTime: justHour(fc.startTime),
@@ -132,26 +129,28 @@ export default function Home() {
     border: '1px solid #333',
     overflow: 'hidden', // keeps iframe from spilling out
     position: 'relative',
+    scrollbarWidth: 'none',
   }
 
   const iframeStyle: React.CSSProperties = {
-    width: '100vw',
-    height: '100vh',
+    width: '50vw',
+    height: '50vh',
+    overflow: 'hidden',
     border: 'none',
+    scrollbarWidth: 'none',
   }
 
   return (
     <main >
       <div style={gridStyle}>
         <div suppressHydrationWarning>
-          <div>Last Refreshed: {minutesSeconds(refreshInterval - nextRefresh)}</div>
-          <div>Refreshing in: {minutesSeconds(nextRefresh)}</div>
+          <div>Refreshing in: {minutesSeconds(Math.trunc((nextRefresh - currTime)/1000))}</div>
           {(weatherBusy || !weatherData) ? <div>Loading weather...</div> : <div className={styles.weatherInfo}>
             <div className={styles.currentWeather}>
               <Image
                 alt={weatherData[0].shortForecast}
-                width={250}
-                height={250}
+                width={128}
+                height={128}
                 src={`${weatherData[0].icon}`}
                 priority />
               <p>{weatherData[0].temperature}&#176; {weatherData[0].temperatureUnit}</p>
@@ -163,8 +162,8 @@ export default function Home() {
                 return <div key={x} className={styles.futureWeatherCard}>
                   <Image
                     alt={weatherData[x].shortForecast}
-                    width={125}
-                    height={125}
+                    width={64}
+                    height={64}
                     src={`${weatherData[x].icon}`}
                     priority />
                   <p>{weatherData[x].temperature}&#176; {weatherData[x].temperatureUnit}</p>
@@ -175,12 +174,13 @@ export default function Home() {
             </div>
           </div>}
         </div>
+
         <div style={cornerStyle}>
           <iframe
             src="https://www.transitchicago.com/traintracker/popout.aspx?bg=y&sort=time&results=6&fx=y&sid=40590&hideoptions=y&size=small"
             style={iframeStyle}
             title="Blue Line"
-            scrolling="no"
+            scrolling='no'
           />
         </div>
 
