@@ -75,7 +75,7 @@ export default function Home() {
         const urlParts = url.split('/');
         // The icon key is the last part before the query string
         const iconWithQuery = urlParts[urlParts.length - 1]; // e.g., "sct?size=medium"
-        const iconKey = iconWithQuery.split('?')[0]; // Extracts "sct"
+        const iconKey = iconWithQuery.split('?')[0].split(',')[0]; // Extracts "sct"
         return iconKey;
       }
 
