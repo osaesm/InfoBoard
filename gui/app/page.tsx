@@ -70,11 +70,19 @@ export default function Home() {
         })
       };
 
-      const processIconUrl = (url: string, p: number) => {
-        //  if (p > 0) {
-        //    return `${url.split('?')[0]}?size=`
-        //  }
-        return `${url.split(',')[0]}?size=`;
+      const processIconUrl = (url: string) => {
+
+        // Example URL: https://api.weather.gov/icons/land/day/sct?size=medium
+        const urlParts = url.split('/');
+        // The icon key is the last part before the query string
+        const iconWithQuery = urlParts[urlParts.length - 1]; // e.g., "sct?size=medium"
+        const iconKey = iconWithQuery.split('?')[0]; // Extracts "sct"
+        return iconKey;
+      }
+
+      const getIconUrl = (iconKey: string, size: 'small' | 'medium' | 'large' = 'medium'): string => {
+        // Constructs the direct URL to the icon on forecast.weather.gov
+        return `https://forecast.weather.gov/newimages/${size}/${iconKey}.png`;
       }
 
       let currHourIdx = 0;
@@ -85,6 +93,8 @@ export default function Home() {
           continue
         }
         if (fc.number > (maxHoursAhead + currHourIdx)) continue;
+        
+        console.log(processIconUrl(fc.icon));
         formattedForecast.push({
           number: fc.number,
           startTime: justHour(fc.startTime),
@@ -95,7 +105,7 @@ export default function Home() {
           humidity: fc.relativeHumidity.value,
           windSpeed: fc.windSpeed,
           windDirection: fc.windDirection,
-          icon: processIconUrl(fc.icon, fc.probabilityOfPrecipitation.value),
+          icon: getIconUrl(processIconUrl(fc.icon)),
           shortForecast: fc.shortForecast
         })
       }
@@ -142,7 +152,7 @@ export default function Home() {
                 alt={weatherData[0].shortForecast}
                 width={250}
                 height={250}
-                src={`${weatherData[0].icon}250`}
+                src={`${weatherData[0].icon}`}
                 priority />
               <p>{weatherData[0].temperature}&#176; {weatherData[0].temperatureUnit}</p>
               <p>Chance of {weatherData[0].temperature <= 32 ? 'snow' : 'rain'} is {weatherData[0].precipitationProbability}%</p>
@@ -155,7 +165,7 @@ export default function Home() {
                     alt={weatherData[x].shortForecast}
                     width={125}
                     height={125}
-                    src={`${weatherData[x].icon}125`}
+                    src={`${weatherData[x].icon}`}
                     priority />
                   <p>{weatherData[x].temperature}&#176; {weatherData[x].temperatureUnit}</p>
                   <p>Chance of {weatherData[x].temperature <= 32 ? 'snow' : 'rain'} is {weatherData[x].precipitationProbability}%</p>
