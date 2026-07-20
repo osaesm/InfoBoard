@@ -126,7 +126,7 @@ export default function Home() {
   }
 
   const cornerStyle: React.CSSProperties = {
-    border: '1px solid #333',
+    border: '0px solid #333',
     overflow: 'hidden', // keeps iframe from spilling out
     position: 'relative',
     scrollbarWidth: 'none',
