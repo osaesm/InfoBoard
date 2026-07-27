@@ -187,7 +187,8 @@ export default function Home() {
         {/* Bottom‑Left: Iframe 2 */}
         <div style={cornerStyle}>
           <iframe
-            src="https://www.transitchicago.com/diydisplay/showarrivals.aspx?stopid=8929,945,15847&bgcolor=335f4c&slidename=North+%26+West+(Away+from+city)&size=small"
+            src={`https://www.transitchicago.com/diydisplay/showarrivals.aspx?stopid=8929,945,15847&bgcolor=335f4c&slidename=North+%26+West+(Away+from+city)&size=small&date=${nextRefresh}`}
+            // src="https://www.transitchicago.com/diydisplay/showarrivals.aspx?stopid=8929,945,15847&bgcolor=335f4c&slidename=North+%26+West+(Away+from+city)&size=small"
             style={iframeStyle}
             title="Northwest"
           />
@@ -196,7 +197,8 @@ export default function Home() {
         {/* Bottom‑Right: Iframe 3 */}
         <div style={cornerStyle}>
           <iframe
-            src="https://www.transitchicago.com/diydisplay/showarrivals.aspx?stopid=8849,898,5481&bgcolor=5f333b&slidename=South+%26+East+(City+center)&size=small"
+            src={`https://www.transitchicago.com/diydisplay/showarrivals.aspx?stopid=8849,898,5481&bgcolor=5f333b&slidename=South+%26+East+(City+center)&size=small&date=${nextRefresh}`}
+            // src="https://www.transitchicago.com/diydisplay/showarrivals.aspx?stopid=8849,898,5481&bgcolor=5f333b&slidename=South+%26+East+(City+center)&size=small"
             style={iframeStyle}
             title="Southeast"
           />
