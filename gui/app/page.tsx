@@ -1,42 +1,43 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react';
-import WeatherCharts, { HourlyDataPoint, MinutelyDataPoint } from './WeatherCharts';
+import WeatherCharts, { WeatherPoint } from './WeatherCharts';
 
 interface WeatherState {
   current: {
-    temperature: number;
+    temp: number;
     feelsLike: number;
     humidity: number;
-    precipitation: number;
-    weatherCode: number;
+    precip: number;
+    code: number;
     windSpeed: number;
     windDirection: number;
     isDay: boolean;
   };
-  hourly: HourlyDataPoint[];
-  minutely: MinutelyDataPoint[];
+  hourly: WeatherPoint[];
+  minutely: WeatherPoint[];
 }
 
-function formatHour(isoTime: string, index: number): string {
-  if (index === 0) return 'Now';
-  const d = new Date(isoTime);
-  return d.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true });
-}
+const BUS_STOPS = [
+  { title: 'Northwest', stopId: '8929,945,15847', bg: '335f4c', name: 'North & West (Away from city)' },
+  { title: 'Southeast', stopId: '8849,898,5481', bg: '5f333b', name: 'South & East (City center)' },
+];
 
-function formatMinutely(isoTime: string, index: number): string {
-  if (index === 0) return 'Now';
-  const mins = index * 15;
-  return `+${mins}m`;
+function mapPoints(times: string[], temp: number[], feels: number[], hum: number[], precip: number[], start: number, count: number, isMinutely = false): WeatherPoint[] {
+  return times.slice(start, start + count).map((t, i) => ({
+    time: i === 0 ? 'Now' : isMinutely ? `+${i * 15}m` : new Date(t).toLocaleTimeString('en-US', { hour: 'numeric', hour12: true }),
+    temperature: temp?.[start + i] ?? 0,
+    feelsLike: feels?.[start + i] ?? 0,
+    humidity: hum?.[start + i] ?? 0,
+    precipitation: precip?.[start + i] ?? 0,
+  }));
 }
 
 export default function Home() {
   const refreshInterval = 60 * 1000;
 
   const [weather, setWeather] = useState<WeatherState | null>(null);
-  const [weatherBusy, setWeatherBusy] = useState<boolean>(true);
-
-  // Initialize as null to prevent Date.now() SSR / hydration mismatch
+  const [weatherBusy, setWeatherBusy] = useState(true);
   const [currTime, setCurrTime] = useState<number | null>(null);
   const [nextRefresh, setNextRefresh] = useState<number | null>(null);
 
@@ -45,136 +46,55 @@ export default function Home() {
       const lat = process.env.NEXT_PUBLIC_LATITUDE;
       const lon = process.env.NEXT_PUBLIC_LONGITUDE;
       const host = process.env.NEXT_PUBLIC_HOST_URL;
+      if (!lat || !lon || !host) throw new Error('Missing environment variables');
 
-      if (!lat || !lon || !host) {
-        throw new Error('Missing NEXT_PUBLIC_LATITUDE, NEXT_PUBLIC_LONGITUDE, or NEXT_PUBLIC_HOST_URL environment variables');
-      }
-
-      const url = `${host}/weather/forecast?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}`;
-
-      const response = await fetch(url, { cache: 'no-cache' });
-      if (!response.ok) {
-        throw new Error(`Weather fetch failed: ${response.status} ${response.statusText}`);
-      }
-      const data = await response.json();
+      const res = await fetch(`${host}/weather/forecast?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}`, { cache: 'no-cache' });
+      if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
+      const data = await res.json();
 
       const now = new Date();
+      const currentHour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours());
+      const current15m = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), Math.floor(now.getMinutes() / 15) * 15);
 
-      // Parse hourly data — find starting index for current hour and slice up to 24 hours
-      const hourlyTimes: string[] = data.hourly?.time ?? [];
-      const currentHourDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours());
-      let startIdx = hourlyTimes.findIndex((t: string) => new Date(t) >= currentHourDate);
-      if (startIdx === -1) {
-        startIdx = 0;
-      }
-      const sliceEnd = Math.min(startIdx + 24, hourlyTimes.length);
-
-      const hourlyData: HourlyDataPoint[] = [];
-      for (let i = startIdx; i < sliceEnd; i++) {
-        const itemIdx = i - startIdx;
-        hourlyData.push({
-          time: formatHour(hourlyTimes[i], itemIdx),
-          timeRaw: hourlyTimes[i],
-          temperature: data.hourly.temperature_2m[i],
-          feelsLike: data.hourly.apparent_temperature[i],
-          humidity: data.hourly.relative_humidity_2m[i],
-          precipitation: data.hourly.precipitation[i],
-          precipitationProbability: data.hourly.precipitation_probability?.[i] ?? 0,
-          weatherCode: data.hourly.weather_code[i],
-          windSpeed: data.hourly.wind_speed_10m[i],
-          windDirection: data.hourly.wind_direction_10m[i],
-        });
-      }
-
-      // Parse minutely_15 data — 15-minute intervals for next 2 hours (8 intervals)
-      const minutelyTimes: string[] = data.minutely_15?.time ?? [];
-      const current15MinDate = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate(),
-        now.getHours(),
-        Math.floor(now.getMinutes() / 15) * 15
-      );
-      let m15StartIdx = minutelyTimes.findIndex((t: string) => new Date(t) >= current15MinDate);
-      if (m15StartIdx === -1) {
-        m15StartIdx = 0;
-      }
-      const minutelyData: MinutelyDataPoint[] = [];
-      for (let i = m15StartIdx; i < m15StartIdx + 8 && i < minutelyTimes.length; i++) {
-        const itemIdx = i - m15StartIdx;
-        minutelyData.push({
-          time: formatMinutely(minutelyTimes[i], itemIdx),
-          timeRaw: minutelyTimes[i],
-          temperature: data.minutely_15.temperature_2m?.[i] ?? data.current.temperature_2m,
-          feelsLike: data.minutely_15.apparent_temperature?.[i] ?? data.current.apparent_temperature,
-          humidity: data.minutely_15.relative_humidity_2m?.[i] ?? data.current.relative_humidity_2m,
-          precipitation: data.minutely_15.precipitation[i],
-          weatherCode: data.minutely_15.weather_code?.[i] ?? data.current.weather_code,
-        });
-      }
+      const hTimes: string[] = data.hourly?.time ?? [];
+      const mTimes: string[] = data.minutely_15?.time ?? [];
+      const startH = Math.max(0, hTimes.findIndex((t: string) => new Date(t) >= currentHour));
+      const startM = Math.max(0, mTimes.findIndex((t: string) => new Date(t) >= current15m));
 
       setWeather({
         current: {
-          temperature: data.current.temperature_2m,
+          temp: data.current.temperature_2m,
           feelsLike: data.current.apparent_temperature,
           humidity: data.current.relative_humidity_2m,
-          precipitation: data.current.precipitation,
-          weatherCode: data.current.weather_code,
+          precip: data.current.precipitation,
+          code: data.current.weather_code,
           windSpeed: data.current.wind_speed_10m,
           windDirection: data.current.wind_direction_10m,
           isDay: data.current.is_day === 1,
         },
-        hourly: hourlyData,
-        minutely: minutelyData,
+        hourly: mapPoints(hTimes, data.hourly.temperature_2m, data.hourly.apparent_temperature, data.hourly.relative_humidity_2m, data.hourly.precipitation, startH, 6),
+        minutely: mapPoints(mTimes, data.minutely_15.temperature_2m, data.minutely_15.apparent_temperature, data.minutely_15.relative_humidity_2m, data.minutely_15.precipitation, startM, 5, true),
       });
       setWeatherBusy(false);
     } catch (err) {
-      console.error('Error fetching weather:', err);
+      console.error('Weather error:', err);
       setWeatherBusy(false);
     }
   }, []);
 
   useEffect(() => {
-    // Set dynamic timestamps client-side only to avoid SSR hydration mismatch
     const now = Date.now();
     setCurrTime(now);
     setNextRefresh(now + refreshInterval);
-
     getWeather();
 
     const intervalId = setInterval(() => {
       const current = Date.now();
       setCurrTime(current);
-      setNextRefresh((prev) => {
-        if (prev && current > prev) {
-          getWeather();
-          return current + refreshInterval;
-        }
-        return prev;
-      });
+      setNextRefresh((prev) => (prev && current > prev ? (getWeather(), current + refreshInterval) : prev));
     }, 1000);
-
     return () => clearInterval(intervalId);
   }, [getWeather, refreshInterval]);
-
-  const minutesSeconds = (x: number) => {
-    const clamped = Math.max(0, x);
-    return clamped < 60
-      ? `${clamped}s`
-      : `${Math.floor(clamped / 60)}m ${String(clamped % 60).padStart(2, '0')}s`;
-  };
-
-  const gridStyle: React.CSSProperties = {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gridTemplateRows: '1fr 1fr',
-    width: '100dvw',
-    height: '100dvh',
-    margin: 0,
-    padding: 0,
-    backgroundColor: '#121212',
-    overflow: 'hidden',
-  };
 
   const cornerStyle: React.CSSProperties = {
     border: '1px solid #27272a',
@@ -194,95 +114,43 @@ export default function Home() {
     scrollbarWidth: 'none',
   };
 
-  const busNorthwestSrc = nextRefresh
-    ? `https://www.transitchicago.com/diydisplay/showarrivals.aspx?stopid=8929,945,15847&bgcolor=335f4c&slidename=North+%26+West+(Away+from+city)&size=small&date=${nextRefresh}`
-    : `https://www.transitchicago.com/diydisplay/showarrivals.aspx?stopid=8929,945,15847&bgcolor=335f4c&slidename=North+%26+West+(Away+from+city)&size=small`;
-
-  const busSoutheastSrc = nextRefresh
-    ? `https://www.transitchicago.com/diydisplay/showarrivals.aspx?stopid=8849,898,5481&bgcolor=5f333b&slidename=South+%26+East+(City+center)&size=small&date=${nextRefresh}`
-    : `https://www.transitchicago.com/diydisplay/showarrivals.aspx?stopid=8849,898,5481&bgcolor=5f333b&slidename=South+%26+East+(City+center)&size=small`;
+  const countdown = currTime && nextRefresh ? Math.max(0, Math.trunc((nextRefresh - currTime) / 1000)) : 60;
 
   return (
     <main>
-      <div style={gridStyle}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr', width: '100dvw', height: '100dvh', margin: 0, padding: 0, backgroundColor: '#121212', overflow: 'hidden' }}>
         {/* Top-Left: Weather Quadrant */}
         <div style={{ ...cornerStyle, display: 'flex', flexDirection: 'column' }} suppressHydrationWarning>
-          <div
-            style={{
-              fontSize: '11px',
-              padding: '3px 8px',
-              color: '#a1a1aa',
-              backgroundColor: '#18181b',
-              borderBottom: '1px solid #27272a',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              flexShrink: 0,
-            }}
-            suppressHydrationWarning
-          >
-            <span suppressHydrationWarning>
-              InfoBoard Weather &bull; Auto-refresh in {currTime && nextRefresh ? minutesSeconds(Math.trunc((nextRefresh - currTime) / 1000)) : '60s'}
-            </span>
-            <span style={{ fontWeight: 600, color: '#e4e4e7' }} suppressHydrationWarning>
-              {currTime
-                ? new Date(currTime).toLocaleTimeString('en-US', {
-                    hour: 'numeric',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    hour12: true,
-                  })
-                : '--:--:--'}
+          <div style={{ fontSize: 11, padding: '3px 8px', color: '#a1a1aa', backgroundColor: '#18181b', borderBottom: '1px solid #27272a', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }} suppressHydrationWarning>
+            <span>InfoBoard Weather &bull; Auto-refresh in {countdown}s</span>
+            <span style={{ fontWeight: 600, color: '#e4e4e7' }}>
+              {currTime ? new Date(currTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }) : '--:--:--'}
             </span>
           </div>
 
           {weatherBusy && !weather ? (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flex: 1,
-                fontSize: '16px',
-                color: '#a1a1aa',
-              }}
-            >
-              Loading weather forecast...
-            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, fontSize: 16, color: '#a1a1aa' }}>Loading weather...</div>
           ) : weather ? (
             <div style={{ flex: 1, minHeight: 0 }}>
               <WeatherCharts
                 hourlyData={weather.hourly}
                 minutelyData={weather.minutely}
-                currentTemp={weather.current.temperature}
+                currentTemp={weather.current.temp}
                 currentFeelsLike={weather.current.feelsLike}
                 currentHumidity={weather.current.humidity}
-                currentPrecip={weather.current.precipitation}
-                currentWeatherCode={weather.current.weatherCode}
+                currentPrecip={weather.current.precip}
+                currentWeatherCode={weather.current.code}
                 currentWindSpeed={weather.current.windSpeed}
                 currentWindDirection={weather.current.windDirection}
                 isDay={weather.current.isDay}
               />
             </div>
           ) : (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flex: 1,
-                fontSize: '14px',
-                color: '#f87171',
-                padding: '16px',
-                textAlign: 'center',
-              }}
-            >
-              Weather data unavailable. Checking connection...
-            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, fontSize: 14, color: '#f87171', padding: 16, textAlign: 'center' }}>Weather data unavailable. Checking connection...</div>
           )}
         </div>
 
-        {/* Top-Right: Blue Line CTA */}
+        {/* Top-Right: Blue Line Train Tracker */}
         <div style={cornerStyle} suppressHydrationWarning>
           <iframe
             src="https://www.transitchicago.com/traintracker/popout.aspx?bg=y&sort=time&results=6&fx=y&sid=40590&hideoptions=y&size=small"
@@ -293,25 +161,15 @@ export default function Home() {
           />
         </div>
 
-        {/* Bottom-Left: CTA Arrivals (North & West) */}
-        <div style={cornerStyle} suppressHydrationWarning>
-          <iframe
-            src={busNorthwestSrc}
-            style={iframeStyle}
-            title="Northwest"
-            suppressHydrationWarning
-          />
-        </div>
-
-        {/* Bottom-Right: CTA Arrivals (South & East) */}
-        <div style={cornerStyle} suppressHydrationWarning>
-          <iframe
-            src={busSoutheastSrc}
-            style={iframeStyle}
-            title="Southeast"
-            suppressHydrationWarning
-          />
-        </div>
+        {/* Bottom Quadrants: CTA Bus Arrivals */}
+        {BUS_STOPS.map((bus) => {
+          const base = `https://www.transitchicago.com/diydisplay/showarrivals.aspx?stopid=${bus.stopId}&bgcolor=${bus.bg}&slidename=${encodeURIComponent(bus.name)}&size=small`;
+          return (
+            <div key={bus.title} style={cornerStyle} suppressHydrationWarning>
+              <iframe src={nextRefresh ? `${base}&date=${nextRefresh}` : base} style={iframeStyle} title={bus.title} suppressHydrationWarning />
+            </div>
+          );
+        })}
       </div>
     </main>
   );
