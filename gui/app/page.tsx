@@ -14,8 +14,7 @@ interface WeatherState {
     windDirection: number;
     isDay: boolean;
   };
-  hourly: WeatherPoint[];
-  minutely: WeatherPoint[];
+  timeline: WeatherPoint[];
 }
 
 const BUS_STOPS = [
@@ -23,14 +22,57 @@ const BUS_STOPS = [
   { title: 'Southeast', stopId: '8849,898,5481', bg: '5f333b', name: 'South & East (City center)' },
 ];
 
-function mapPoints(times: string[], temp: number[], feels: number[], hum: number[], precip: number[], start: number, count: number, isMinutely = false): WeatherPoint[] {
-  return times.slice(start, start + count).map((t, i) => ({
-    time: i === 0 ? 'Now' : isMinutely ? `+${i * 15}m` : new Date(t).toLocaleTimeString('en-US', { hour: 'numeric', hour12: true }),
-    temperature: temp?.[start + i] ?? 0,
-    feelsLike: feels?.[start + i] ?? 0,
-    humidity: hum?.[start + i] ?? 0,
-    precipitation: precip?.[start + i] ?? 0,
-  }));
+function buildTimeline(
+  current: { temp: number; feelsLike: number; humidity: number; precip: number },
+  data: any,
+  startH: number,
+  startM: number
+): WeatherPoint[] {
+  const points: WeatherPoint[] = [];
+
+  // Point 0: Current conditions (Now)
+  points.push({
+    timeOffset: 0,
+    timeLabel: 'Now',
+    temperature: current.temp,
+    feelsLike: current.feelsLike,
+    humidity: current.humidity,
+    precipitation: current.precip ?? 0,
+  });
+
+  // Next 15m intervals in the first hour (+15m, +30m, +45m)
+  const mOffsets = [15, 30, 45];
+  mOffsets.forEach((offset, idx) => {
+    const idxM = startM + idx + 1;
+    points.push({
+      timeOffset: offset,
+      timeLabel: `${offset}m`,
+      temperature: data.minutely_15?.temperature_2m?.[idxM] ?? current.temp,
+      feelsLike: data.minutely_15?.apparent_temperature?.[idxM] ?? current.feelsLike,
+      humidity: data.minutely_15?.relative_humidity_2m?.[idxM] ?? current.humidity,
+      precipitation: data.minutely_15?.precipitation?.[idxM] ?? 0,
+    });
+  });
+
+  // Hourly intervals (+1h to +6h: 60m, 120m, 180m, 240m, 300m, 360m)
+  const hTimes: string[] = data.hourly?.time ?? [];
+  for (let h = 1; h <= 6; h++) {
+    const idxH = startH + h;
+    const timeStr = hTimes[idxH];
+    const timeLabel = timeStr
+      ? new Date(timeStr).toLocaleTimeString('en-US', { hour: 'numeric', hour12: true })
+      : `+${h}h`;
+    points.push({
+      timeOffset: h * 60,
+      timeLabel,
+      temperature: data.hourly?.temperature_2m?.[idxH] ?? current.temp,
+      feelsLike: data.hourly?.apparent_temperature?.[idxH] ?? current.feelsLike,
+      humidity: data.hourly?.relative_humidity_2m?.[idxH] ?? current.humidity,
+      precipitation: data.hourly?.precipitation?.[idxH] ?? 0,
+    });
+  }
+
+  return points;
 }
 
 export default function Home() {
@@ -61,19 +103,20 @@ export default function Home() {
       const startH = Math.max(0, hTimes.findIndex((t: string) => new Date(t) >= currentHour));
       const startM = Math.max(0, mTimes.findIndex((t: string) => new Date(t) >= current15m));
 
+      const current = {
+        temp: data.current.temperature_2m,
+        feelsLike: data.current.apparent_temperature,
+        humidity: data.current.relative_humidity_2m,
+        precip: data.current.precipitation,
+        code: data.current.weather_code,
+        windSpeed: data.current.wind_speed_10m,
+        windDirection: data.current.wind_direction_10m,
+        isDay: data.current.is_day === 1,
+      };
+
       setWeather({
-        current: {
-          temp: data.current.temperature_2m,
-          feelsLike: data.current.apparent_temperature,
-          humidity: data.current.relative_humidity_2m,
-          precip: data.current.precipitation,
-          code: data.current.weather_code,
-          windSpeed: data.current.wind_speed_10m,
-          windDirection: data.current.wind_direction_10m,
-          isDay: data.current.is_day === 1,
-        },
-        hourly: mapPoints(hTimes, data.hourly.temperature_2m, data.hourly.apparent_temperature, data.hourly.relative_humidity_2m, data.hourly.precipitation, startH, 6),
-        minutely: mapPoints(mTimes, data.minutely_15.temperature_2m, data.minutely_15.apparent_temperature, data.minutely_15.relative_humidity_2m, data.minutely_15.precipitation, startM, 5, true),
+        current,
+        timeline: buildTimeline(current, data, startH, startM),
       });
       setWeatherBusy(false);
     } catch (err) {
@@ -121,9 +164,9 @@ export default function Home() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr', width: '100dvw', height: '100dvh', margin: 0, padding: 0, backgroundColor: '#121212', overflow: 'hidden' }}>
         {/* Top-Left: Weather Quadrant */}
         <div style={{ ...cornerStyle, display: 'flex', flexDirection: 'column' }} suppressHydrationWarning>
-          <div style={{ fontSize: 11, padding: '3px 8px', color: '#a1a1aa', backgroundColor: '#18181b', borderBottom: '1px solid #27272a', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }} suppressHydrationWarning>
-            <span>InfoBoard Weather &bull; Auto-refresh in {countdown}s</span>
-            <span style={{ fontWeight: 600, color: '#e4e4e7' }}>
+          <div style={{ fontSize: 13, padding: '3px 10px', color: '#a1a1aa', backgroundColor: '#18181b', borderBottom: '1px solid #27272a', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }} suppressHydrationWarning>
+            <span>⟳ Refresh: {countdown}s</span>
+            <span style={{ fontWeight: 700, color: '#f4f4f5' }}>
               {currTime ? new Date(currTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }) : '--:--:--'}
             </span>
           </div>
@@ -133,8 +176,7 @@ export default function Home() {
           ) : weather ? (
             <div style={{ flex: 1, minHeight: 0 }}>
               <WeatherCharts
-                hourlyData={weather.hourly}
-                minutelyData={weather.minutely}
+                timeline={weather.timeline}
                 currentTemp={weather.current.temp}
                 currentFeelsLike={weather.current.feelsLike}
                 currentHumidity={weather.current.humidity}

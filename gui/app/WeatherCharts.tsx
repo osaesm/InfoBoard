@@ -16,7 +16,8 @@ import {
 } from 'recharts';
 
 export interface WeatherPoint {
-  time: string;
+  timeOffset: number;
+  timeLabel: string;
   temperature: number;
   feelsLike: number;
   humidity: number;
@@ -24,8 +25,7 @@ export interface WeatherPoint {
 }
 
 interface WeatherChartsProps {
-  hourlyData: WeatherPoint[];
-  minutelyData: WeatherPoint[];
+  timeline: WeatherPoint[];
   currentTemp: number;
   currentFeelsLike: number;
   currentHumidity: number;
@@ -53,17 +53,23 @@ function getWindCompass(deg: number): string {
   return directions[Math.round((deg % 360) / 45) % 8];
 }
 
-function getDomain(values: number[], padLo = 2, padHi = 5, floor?: number, cap?: number): [number, number] {
+function getDomain(values: number[], padLo = 4, padHi = 6, floor?: number, cap?: number): [number, number] {
   const min = Math.min(...values);
   const max = Math.max(...values);
   const span = Math.max(max - min, 4);
-  const lo = min - Math.max(padLo, Math.round(span * 0.1));
-  const hi = max + Math.max(padHi, Math.round(span * 0.25));
+  const lo = min - Math.max(padLo, Math.round(span * 0.12));
+  const hi = max + Math.max(padHi, Math.round(span * 0.18));
   return [floor !== undefined ? Math.max(floor, lo) : lo, cap !== undefined ? Math.min(cap, hi) : hi];
 }
 
-const chartMargin = { top: 14, right: 14, left: -14, bottom: 0 };
-const commonYAxis = { stroke: '#71717a', tick: { fontSize: 10, fill: '#a1a1aa' }, width: 36, axisLine: false, tickLine: false };
+const chartMargin = { top: 20, right: 18, left: 6, bottom: 2 };
+const commonYAxis = {
+  stroke: '#71717a',
+  tick: { fontSize: 12, fill: '#d4d4d8', fontWeight: 600 },
+  width: 52,
+  axisLine: false,
+  tickLine: false,
+};
 const commonGrid = <CartesianGrid strokeDasharray="2 2" stroke="#27272a" vertical={false} />;
 
 function ChartCard({ title, children, flex = 1 }: { title: React.ReactNode; children: React.ReactElement; flex?: number }) {
@@ -72,17 +78,18 @@ function ChartCard({ title, children, flex = 1 }: { title: React.ReactNode; chil
       <div
         style={{
           position: 'absolute',
-          top: 2,
-          right: 16,
+          top: 3,
+          right: 18,
           zIndex: 10,
-          fontSize: 11,
+          fontSize: 13,
           color: '#d4d4d8',
-          backgroundColor: 'rgba(24, 24, 27, 0.85)',
-          padding: '1px 8px',
+          backgroundColor: 'rgba(24, 24, 27, 0.9)',
+          padding: '2px 10px',
           borderRadius: 4,
-          border: '1px solid #27272a',
+          border: '1px solid #3f3f46',
           display: 'flex',
-          gap: 12,
+          gap: 14,
+          alignItems: 'center',
         }}
       >
         {title}
@@ -95,8 +102,7 @@ function ChartCard({ title, children, flex = 1 }: { title: React.ReactNode; chil
 }
 
 export default function WeatherCharts({
-  hourlyData,
-  minutelyData,
+  timeline,
   currentTemp,
   currentFeelsLike,
   currentHumidity,
@@ -107,37 +113,49 @@ export default function WeatherCharts({
   isDay,
 }: WeatherChartsProps) {
   const [mounted, setMounted] = useState(false);
-  const [isGranular, setIsGranular] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
-
-  // Automatic hands-free rotation between 6h hourly (20s) and 15m granular (10s)
-  useEffect(() => {
-    const timer = setTimeout(() => setIsGranular((prev) => !prev), isGranular ? 10000 : 20000);
-    return () => clearTimeout(timer);
-  }, [isGranular]);
 
   const weather = useMemo(() => getWeatherInfo(currentWeatherCode, isDay), [currentWeatherCode, isDay]);
 
   const nextHourRain = useMemo(() => {
-    const pts = minutelyData.slice(0, 5);
+    const pts = timeline.filter((pt) => pt.timeOffset <= 60);
     const sum = pts.reduce((acc, pt) => acc + (pt.precipitation ?? 0), 0);
     const firstIdx = pts.findIndex((pt) => (pt.precipitation ?? 0) > 0);
     if (sum === 0 || firstIdx === -1) return { hasRain: false, label: 'Next 60m Dry' };
-    const mins = firstIdx * 15;
-    return { hasRain: true, label: `${mins === 0 ? 'Raining now' : `Rain in ~${mins}m`} (${sum.toFixed(2)}")` };
-  }, [minutelyData]);
+    const mins = pts[firstIdx].timeOffset;
+    return {
+      hasRain: true,
+      label: `${mins === 0 ? 'Raining now' : `Rain in ~${mins}m`} (${sum.toFixed(2)}")`,
+    };
+  }, [timeline]);
 
-  const chartData = useMemo(() => (isGranular ? minutelyData.slice(0, 5) : hourlyData.slice(0, 6)), [isGranular, hourlyData, minutelyData]);
+  const timelineTicks = useMemo(() => timeline.map((d) => d.timeOffset), [timeline]);
+  const tickMap = useMemo(() => {
+    const map: Record<number, string> = {};
+    timeline.forEach((pt) => {
+      map[pt.timeOffset] = pt.timeLabel;
+    });
+    return map;
+  }, [timeline]);
 
-  const tempDomain = useMemo(() => getDomain(chartData.flatMap((d) => [d.temperature, d.feelsLike]), 2, 5), [chartData]);
-  const humDomain = useMemo(() => getDomain(chartData.map((d) => d.humidity), 4, 8, 0, 115), [chartData]);
+  const tempDomain = useMemo(
+    () => getDomain(timeline.flatMap((d) => [d.temperature, d.feelsLike]), 5, 6),
+    [timeline]
+  );
+  const humDomain = useMemo(
+    () => getDomain(timeline.map((d) => d.humidity), 5, 8, 0, 105),
+    [timeline]
+  );
   const { maxPrecip, totalPrecip } = useMemo(() => {
-    const precips = chartData.map((d) => d.precipitation ?? 0);
+    const precips = timeline.map((d) => d.precipitation ?? 0);
     const maxVal = Math.max(...precips, 0);
     const sum = precips.reduce((a, b) => a + b, 0);
-    return { maxPrecip: Math.max(0.1, Math.ceil(maxVal * 20) / 20 + 0.03), totalPrecip: sum };
-  }, [chartData]);
+    return {
+      maxPrecip: Math.max(0.1, Math.ceil(maxVal * 20) / 20 + 0.03),
+      totalPrecip: sum,
+    };
+  }, [timeline]);
 
   if (!mounted) {
     return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#888' }}>Loading charts...</div>;
@@ -152,7 +170,7 @@ export default function WeatherCharts({
         width: '100%',
         boxSizing: 'border-box',
         overflow: 'hidden',
-        padding: '2px 8px 4px 8px',
+        padding: '2px 8px 6px 8px',
         backgroundColor: '#18181b',
         color: '#f4f4f5',
         fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
@@ -166,72 +184,106 @@ export default function WeatherCharts({
           alignItems: 'center',
           justifyContent: 'space-between',
           flexWrap: 'nowrap',
-          padding: '4px 6px',
+          padding: '6px 8px',
           borderBottom: '1px solid #27272a',
           flexShrink: 0,
-          gap: 8,
+          gap: 10,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 32, lineHeight: 1 }} title={weather.desc}>{weather.icon}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 36, lineHeight: 1 }} title={weather.desc}>{weather.icon}</span>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-              <span style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.5px' }}>{Math.round(currentTemp)}°F</span>
-              <span style={{ fontSize: 13, color: '#a1a1aa', fontWeight: 500 }}>Feels {Math.round(currentFeelsLike)}°</span>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+              <span style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-0.5px' }}>{Math.round(currentTemp)}°F</span>
+              <span style={{ fontSize: 16, color: '#38bdf8', fontWeight: 700 }}>Feels {Math.round(currentFeelsLike)}°</span>
             </div>
-            <span style={{ fontSize: 12, color: '#d4d4d8', fontWeight: 500 }}>{weather.desc}</span>
+            <span style={{ fontSize: 13, color: '#d4d4d8', fontWeight: 600 }}>{weather.desc}</span>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, backgroundColor: '#27272a', padding: '3px 8px', borderRadius: 5, border: '1px solid #3f3f46' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, backgroundColor: '#27272a', padding: '4px 10px', borderRadius: 6, border: '1px solid #3f3f46' }}>
             <span style={{ color: '#38bdf8' }}>💧</span>
-            <span style={{ fontWeight: 600 }}>{currentHumidity}%</span>
+            <span style={{ fontWeight: 700 }}>{currentHumidity}%</span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, backgroundColor: '#27272a', padding: '3px 8px', borderRadius: 5, border: '1px solid #3f3f46' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, backgroundColor: '#27272a', padding: '4px 10px', borderRadius: 6, border: '1px solid #3f3f46' }}>
             <span style={{ color: nextHourRain.hasRain ? '#60a5fa' : '#4ade80' }}>{nextHourRain.hasRain ? '🌧️' : '☀️'}</span>
-            <span style={{ fontWeight: 600, color: nextHourRain.hasRain ? '#93c5fd' : '#86efac' }}>{nextHourRain.label}</span>
+            <span style={{ fontWeight: 700, color: nextHourRain.hasRain ? '#93c5fd' : '#86efac' }}>{nextHourRain.label}</span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, backgroundColor: '#27272a', padding: '3px 8px', borderRadius: 5, border: '1px solid #3f3f46' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, backgroundColor: '#27272a', padding: '4px 10px', borderRadius: 6, border: '1px solid #3f3f46' }}>
             <span style={{ color: '#a1a1aa' }}>💨</span>
-            <span style={{ fontWeight: 500 }}>{Math.round(currentWindSpeed)} mph {getWindCompass(currentWindDirection)}</span>
+            <span style={{ fontWeight: 700 }}>{Math.round(currentWindSpeed)} mph {getWindCompass(currentWindDirection)}</span>
           </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#27272a', padding: '3px 8px', borderRadius: 6, border: '1px solid #3f3f46', gap: 6 }}>
-          <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', backgroundColor: isGranular ? '#38bdf8' : '#22c55e', boxShadow: isGranular ? '0 0 6px #38bdf8' : '0 0 6px #22c55e' }} />
-          <span style={{ fontSize: 11, color: '#f4f4f5', fontWeight: 600 }}>{isGranular ? 'Next 1h (15m Intervals)' : '6-Hour Forecast'}</span>
         </div>
       </div>
 
       {/* Static Charts Container */}
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 2, marginTop: 2, pointerEvents: 'none' }}>
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4, pointerEvents: 'none' }}>
         {/* Chart 1: Temperature & Real Feel */}
         <ChartCard
-          flex={1.25}
+          flex={1.15}
           title={
             <>
-              <span style={{ color: '#fb923c', fontWeight: 600 }}>● Temp (°F)</span>
-              <span style={{ color: '#38bdf8', fontWeight: 600 }}>╌ Real Feel (°F)</span>
+              <span style={{ color: '#fb923c', fontWeight: 700 }}>● Temp (°F)</span>
+              <span style={{ color: '#38bdf8', fontWeight: 700 }}>╌ Real Feel (°F)</span>
             </>
           }
         >
-          <LineChart data={chartData} margin={chartMargin}>
+          <LineChart data={timeline} margin={chartMargin}>
             {commonGrid}
-            <XAxis dataKey="time" stroke="#52525b" tick={false} axisLine={{ stroke: '#3f3f46' }} height={2} />
+            <XAxis
+              type="number"
+              dataKey="timeOffset"
+              domain={[-12, 372]}
+              ticks={timelineTicks}
+              tick={false}
+              axisLine={{ stroke: '#3f3f46' }}
+              height={2}
+            />
             <YAxis {...commonYAxis} domain={tempDomain} tickFormatter={(v: number) => `${v}°`} />
-            <Line type="monotone" dataKey="temperature" stroke="#fb923c" strokeWidth={2.6} dot={{ r: 3, fill: '#fb923c' }} activeDot={false} isAnimationActive={false}>
-              <LabelList dataKey="temperature" position="top" offset={8} formatter={(v: number) => `${Math.round(v)}°`} style={{ fontSize: 11, fill: '#fb923c', fontWeight: 700 }} />
+            <Line
+              type="monotone"
+              dataKey="temperature"
+              stroke="#fb923c"
+              strokeWidth={2.8}
+              dot={{ r: 3.5, fill: '#fb923c' }}
+              activeDot={false}
+              isAnimationActive={false}
+            >
+              <LabelList
+                dataKey="temperature"
+                position="top"
+                offset={8}
+                formatter={(v: number) => `${Math.round(v)}°`}
+                style={{ fontSize: 13, fill: '#fb923c', fontWeight: 800 }}
+              />
             </Line>
-            <Line type="monotone" dataKey="feelsLike" stroke="#38bdf8" strokeWidth={1.8} strokeDasharray="4 3" dot={{ r: 2, fill: '#38bdf8' }} activeDot={false} isAnimationActive={false} />
+            <Line
+              type="monotone"
+              dataKey="feelsLike"
+              stroke="#38bdf8"
+              strokeWidth={2}
+              strokeDasharray="4 3"
+              dot={{ r: 3, fill: '#38bdf8' }}
+              activeDot={false}
+              isAnimationActive={false}
+            >
+              <LabelList
+                dataKey="feelsLike"
+                position="bottom"
+                offset={8}
+                formatter={(v: number) => `${Math.round(v)}°`}
+                style={{ fontSize: 13, fill: '#38bdf8', fontWeight: 800 }}
+              />
+            </Line>
           </LineChart>
         </ChartCard>
 
         {/* Chart 2: Humidity */}
-        <ChartCard flex={1} title={<span style={{ color: '#38bdf8', fontWeight: 600 }}>💧 Humidity (%)</span>}>
-          <AreaChart data={chartData} margin={chartMargin}>
+        <ChartCard flex={1} title={<span style={{ color: '#22d3ee', fontWeight: 700 }}>💧 Humidity (%)</span>}>
+          <AreaChart data={timeline} margin={chartMargin}>
             <defs>
               <linearGradient id="humGrad" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.45} />
@@ -239,10 +291,33 @@ export default function WeatherCharts({
               </linearGradient>
             </defs>
             {commonGrid}
-            <XAxis dataKey="time" stroke="#52525b" tick={false} axisLine={{ stroke: '#3f3f46' }} height={2} />
+            <XAxis
+              type="number"
+              dataKey="timeOffset"
+              domain={[-12, 372]}
+              ticks={timelineTicks}
+              tick={false}
+              axisLine={{ stroke: '#3f3f46' }}
+              height={2}
+            />
             <YAxis {...commonYAxis} domain={humDomain} tickFormatter={(v: number) => `${v}%`} />
-            <Area type="monotone" dataKey="humidity" stroke="#06b6d4" strokeWidth={2} fill="url(#humGrad)" dot={{ r: 3, fill: '#06b6d4' }} activeDot={false} isAnimationActive={false}>
-              <LabelList dataKey="humidity" position="top" offset={7} formatter={(v: number) => `${Math.round(v)}%`} style={{ fontSize: 10, fill: '#22d3ee', fontWeight: 700 }} />
+            <Area
+              type="monotone"
+              dataKey="humidity"
+              stroke="#06b6d4"
+              strokeWidth={2.2}
+              fill="url(#humGrad)"
+              dot={{ r: 3.5, fill: '#06b6d4' }}
+              activeDot={false}
+              isAnimationActive={false}
+            >
+              <LabelList
+                dataKey="humidity"
+                position="top"
+                offset={7}
+                formatter={(v: number) => `${Math.round(v)}%`}
+                style={{ fontSize: 13, fill: '#22d3ee', fontWeight: 800 }}
+              />
             </Area>
           </AreaChart>
         </ChartCard>
@@ -252,33 +327,48 @@ export default function WeatherCharts({
           flex={1.15}
           title={
             <>
-              <span style={{ color: '#60a5fa', fontWeight: 600 }}>🌧️ Precip ({isGranular ? '15m intervals' : 'Hourly total'})</span>
-              <span style={{ color: totalPrecip > 0 ? '#93c5fd' : '#a1a1aa', fontWeight: 500 }}>
+              <span style={{ color: '#60a5fa', fontWeight: 700 }}>🌧️ Precip (in)</span>
+              <span style={{ color: totalPrecip > 0 ? '#93c5fd' : '#a1a1aa', fontWeight: 600 }}>
                 Total: {totalPrecip.toFixed(2)}&quot; {totalPrecip === 0 && '(Dry)'}
               </span>
             </>
           }
         >
-          <BarChart data={chartData} margin={chartMargin}>
+          <BarChart data={timeline} margin={{ ...chartMargin, bottom: 0 }}>
             {commonGrid}
-            <XAxis dataKey="time" stroke="#71717a" tick={{ fontSize: 11, fill: '#e4e4e7', fontWeight: 600 }} axisLine={{ stroke: '#3f3f46' }} interval={0} height={22} />
-            <YAxis {...commonYAxis} domain={[0, maxPrecip]} tickFormatter={(v: number) => `${v.toFixed(2)}"`} />
-            <Bar dataKey="precipitation" fill="#3b82f6" radius={[3, 3, 0, 0]} isAnimationActive={false} minPointSize={2}>
-              <LabelList dataKey="precipitation" position="top" offset={4} formatter={(v: number) => (v > 0.005 ? `${v.toFixed(2)}"` : '')} style={{ fontSize: 10, fill: '#93c5fd', fontWeight: 700 }} />
+            <XAxis
+              type="number"
+              dataKey="timeOffset"
+              domain={[-12, 372]}
+              ticks={timelineTicks}
+              tick={{ fontSize: 13, fill: '#f4f4f5', fontWeight: 700 }}
+              tickFormatter={(v: number) => tickMap[v] ?? ''}
+              axisLine={{ stroke: '#3f3f46' }}
+              interval={0}
+              height={26}
+            />
+            <YAxis
+              {...commonYAxis}
+              domain={[0, maxPrecip]}
+              tickFormatter={(v: number) => `${v.toFixed(2)}"`}
+            />
+            <Bar
+              dataKey="precipitation"
+              fill="#3b82f6"
+              radius={[3, 3, 0, 0]}
+              barSize={14}
+              isAnimationActive={false}
+            >
+              <LabelList
+                dataKey="precipitation"
+                position="top"
+                offset={5}
+                formatter={(v: number) => (v > 0.005 ? `${v.toFixed(2)}"` : '')}
+                style={{ fontSize: 12, fill: '#93c5fd', fontWeight: 800 }}
+              />
             </Bar>
           </BarChart>
         </ChartCard>
-      </div>
-
-      {/* Attribution Footer */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 10, color: '#71717a', flexShrink: 0, paddingTop: 2 }}>
-        <span>{isGranular ? 'Granular 15-minute radar outlook (auto-cycling)' : 'Showing next 6 hours (auto-cycling)'}</span>
-        <span>
-          Weather data by{' '}
-          <a href="https://open-meteo.com/" style={{ color: '#a1a1aa', textDecoration: 'none' }} target="_blank" rel="noopener noreferrer">
-            Open-Meteo
-          </a>
-        </span>
       </div>
     </div>
   );
