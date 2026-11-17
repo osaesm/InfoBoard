@@ -121,64 +121,99 @@ function ChartCard({
   );
 }
 
-function createCollisionResolver(isBelow: boolean = false) {
+// Stateless label renderer: takes a full sorted snapshot of label positions computed
+// once per data array, then each call just looks up its index.  No shared mutable state
+// that could bleed across React renders.
+function buildLabelPositions(
+  points: { x: number; y: number; value: number }[],
+  isBelow: boolean
+): { x: number; y: number; value: number }[] {
+  const result: { x: number; y: number; value: number }[] = [];
   let prevX = -999;
   let prevY = -999;
 
-  return function resolveLabelPos(props: any) {
-    const { x, y, value, index } = props;
-    if (value === undefined || value === null) return null;
-
-    if (index === 0) {
-      prevX = -999;
-      prevY = -999;
-    }
-
+  for (const { x, y, value } of points) {
     let finalY: number;
 
     if (!isBelow) {
-      // Primary candidate is 9px above the point
       const primaryY = y - 9;
-      // If horizontal distance to previous label is large, no collision risk
       if (Math.abs(x - prevX) >= 34) {
         finalY = primaryY;
+      } else if (Math.abs(primaryY - prevY) >= 14) {
+        finalY = primaryY;
       } else {
-        // Points are horizontally close (< 34px)
-        // Check if primaryY collides with prevY (within 14px)
-        if (Math.abs(primaryY - prevY) >= 14) {
-          finalY = primaryY;
-        } else {
-          // Collision! Determine whether to push above or below the forbidden zone [prevY - 14, prevY + 14]
-          const aboveY = prevY - 14;
-          const belowY = prevY + 14;
-          // belowY is only valid if it stays above the point dot (at least 6px above y)
-          if (belowY <= y - 6) {
-            finalY = belowY;
-          } else {
-            finalY = aboveY;
-          }
-        }
+        const aboveY = prevY - 14;
+        const belowY = prevY + 14;
+        finalY = belowY <= y - 6 ? belowY : aboveY;
       }
       finalY = Math.max(12, finalY);
     } else {
-      // Below the point (for Feels Like)
       const primaryY = y + 15;
       if (Math.abs(x - prevX) >= 34) {
         finalY = primaryY;
+      } else if (Math.abs(primaryY - prevY) >= 14) {
+        finalY = primaryY;
       } else {
-        if (Math.abs(primaryY - prevY) >= 14) {
-          finalY = primaryY;
-        } else {
-          // Shift further below the forbidden zone
-          finalY = Math.max(prevY + 14, y + 26);
-        }
+        finalY = Math.max(prevY + 14, y + 26);
       }
     }
 
     prevX = x;
     prevY = finalY;
+    result.push({ x, y: finalY, value });
+  }
 
-    return { x, y: finalY, value };
+  return result;
+}
+
+// Recharts passes each label's props individually; we need a stable ordered list
+// built from the full dataset first.  We use a ref-like accumulator pattern:
+// on index===0 we reset and collect, on the last index we emit all at once.
+function makeCollisionAwareLabelList(
+  fill: string,
+  suffix: string,
+  isBelow: boolean
+) {
+  // Accumulator lives OUTSIDE the returned component so a single pass collects all points.
+  // It is replaced atomically when index===0 to avoid stale state across data changes.
+  let pending: { x: number; y: number; value: number }[] = [];
+  let resolved: { x: number; y: number; value: number }[] = [];
+
+  return function LabelContent(props: any) {
+    const { x, y, value, index } = props;
+    if (value === undefined || value === null) return null;
+
+    if (index === 0) {
+      pending = [];
+      resolved = [];
+    }
+
+    pending[index] = { x, y, value };
+
+    // We won't know the full set until Recharts calls the last label.
+    // Recharts calls content in order 0…n-1; on the first pass resolve positions
+    // only when we have at least `index+1` entries (i.e. every call after index 0
+    // just appends).  We always return the already-resolved position for this index.
+    resolved = buildLabelPositions(pending, isBelow);
+    const pos = resolved[index];
+    if (!pos) return null;
+
+    return (
+      <text
+        x={pos.x}
+        y={pos.y}
+        textAnchor="middle"
+        fill={fill}
+        fontSize={13}
+        fontWeight={800}
+        stroke="#18181b"
+        strokeWidth={3.5}
+        paintOrder="stroke fill"
+        strokeLinejoin="round"
+      >
+        {`${Math.round(pos.value)}${suffix}`}
+      </text>
+    );
   };
 }
 
@@ -281,98 +316,48 @@ export default function WeatherCharts({
     );
   };
 
-  const renderTempLabel = useMemo(() => {
-    const resolver = createCollisionResolver(false);
-    return function TempLabel(props: any) {
-      const pos = resolver(props);
-      if (!pos) return null;
+  // Stable label renderers: recreated only when timeline changes (not on every 1s clock tick).
+  // Each uses makeCollisionAwareLabelList which accumulates positions from index 0 to N
+  // in a single ordered pass — no shared mutable state that bleeds across render cycles.
+  const renderTempLabel = useMemo(
+    () => makeCollisionAwareLabelList('#fb923c', '°', false),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [timeline]
+  );
+  const renderFeelsLikeLabel = useMemo(
+    () => makeCollisionAwareLabelList('#38bdf8', '°', true),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [timeline]
+  );
+  const renderHumidityLabel = useMemo(
+    () => makeCollisionAwareLabelList('#22d3ee', '%', false),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [timeline]
+  );
+
+  // Precip label is stateless (bar x/y/width are authoritative; no collision resolution needed)
+  // but wrap in useCallback so the reference is stable across the per-second clock re-renders.
+  const renderPrecipLabel = useMemo(() => {
+    return function PrecipLabel({ x, y, width, value }: any) {
+      if (!value || value <= 0.005) return null;
       return (
         <text
-          x={pos.x}
-          y={pos.y}
+          x={x + width / 2}
+          y={y - 6}
           textAnchor="middle"
-          fill="#fb923c"
-          fontSize={13}
+          fill="#93c5fd"
+          fontSize={12}
           fontWeight={800}
           stroke="#18181b"
           strokeWidth={3.5}
           paintOrder="stroke fill"
           strokeLinejoin="round"
         >
-          {`${Math.round(pos.value)}°`}
+          {`${value.toFixed(2)}"`}
         </text>
       );
     };
-  }, [timeline]);
-
-  const renderFeelsLikeLabel = useMemo(() => {
-    const resolver = createCollisionResolver(true);
-    return function FeelsLikeLabel(props: any) {
-      const pos = resolver(props);
-      if (!pos) return null;
-      return (
-        <text
-          x={pos.x}
-          y={pos.y}
-          textAnchor="middle"
-          fill="#38bdf8"
-          fontSize={13}
-          fontWeight={800}
-          stroke="#18181b"
-          strokeWidth={3.5}
-          paintOrder="stroke fill"
-          strokeLinejoin="round"
-        >
-          {`${Math.round(pos.value)}°`}
-        </text>
-      );
-    };
-  }, [timeline]);
-
-  const renderHumidityLabel = useMemo(() => {
-    const resolver = createCollisionResolver(false);
-    return function HumidityLabel(props: any) {
-      const pos = resolver(props);
-      if (!pos) return null;
-      return (
-        <text
-          x={pos.x}
-          y={pos.y}
-          textAnchor="middle"
-          fill="#22d3ee"
-          fontSize={13}
-          fontWeight={800}
-          stroke="#18181b"
-          strokeWidth={3.5}
-          paintOrder="stroke fill"
-          strokeLinejoin="round"
-        >
-          {`${Math.round(pos.value)}%`}
-        </text>
-      );
-    };
-  }, [timeline]);
-
-  const renderPrecipLabel = (props: any) => {
-    const { x, y, width, value } = props;
-    if (!value || value <= 0.005) return null;
-    return (
-      <text
-        x={x + width / 2}
-        y={y - 6}
-        textAnchor="middle"
-        fill="#93c5fd"
-        fontSize={12}
-        fontWeight={800}
-        stroke="#18181b"
-        strokeWidth={3.5}
-        paintOrder="stroke fill"
-        strokeLinejoin="round"
-      >
-        {`${value.toFixed(2)}"`}
-      </text>
-    );
-  };
+  }, []);
 
   const tempDomain = useMemo(
     () => getDomain(timeline.flatMap((d) => [d.temperature, d.feelsLike]), 5, 6),
