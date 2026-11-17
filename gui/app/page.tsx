@@ -200,7 +200,7 @@ export default function Home() {
         style={{
           display: 'grid',
           gridTemplateRows: '40dvh 60dvh',
-          gridTemplateColumns: 'repeat(3, 1fr)',
+          gridTemplateColumns: '22dvw 39dvw 39dvw',
           width: '100dvw',
           height: '100dvh',
           margin: 0,
