@@ -15,7 +15,6 @@ interface WeatherState {
     isDay: boolean;
   };
   timeline: WeatherPoint[];
-  extraTicks?: WeatherPoint[];
 }
 
 const BUS_STOPS = [
@@ -27,9 +26,8 @@ function buildTimeline(
   current: { temp: number; feelsLike: number; humidity: number; precip: number },
   data: any,
   now: Date
-): { timeline: WeatherPoint[]; extraTicks: WeatherPoint[] } {
+): WeatherPoint[] {
   const points: WeatherPoint[] = [];
-  const extraTicks: WeatherPoint[] = [];
   const mTimes: string[] = data.minutely_15?.time ?? [];
   const hTimes: string[] = data.hourly?.time ?? [];
 
@@ -49,79 +47,69 @@ function buildTimeline(
     return bestIdx;
   }
 
+  const nowMs = now.getTime();
+
   // Point 0: Current conditions (Now)
   points.push({
     timeOffset: 0,
     timeLabel: 'Now',
-    isClockHour: true,
     temperature: current.temp,
     feelsLike: current.feelsLike,
     humidity: current.humidity,
     precipitation: current.precip ?? 0,
   });
 
-  const nowMs = now.getTime();
-  const cadence = [15, 30, 45, 60];
+  // Granular 15-minute forecast over the next hour
+  // Skip the very next 15-min mark only if it's < 3 mins away (essentially already past)
+  let first15 = Math.ceil(nowMs / (15 * 60000)) * (15 * 60000);
+  if (first15 - nowMs < 3 * 60000) {
+    first15 += 15 * 60000;
+  }
 
-  // The next clock hour H1 (e.g., 3 PM)
-  const h1Date = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours() + 1, 0, 0);
-  const h1Offset = Math.round((h1Date.getTime() - nowMs) / 60000);
-  const h1Label = h1Date.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true });
+  let curr = first15;
+  while (curr - nowMs <= 75 * 60000) {
+    const d = new Date(curr);
+    const offset = Math.round((curr - nowMs) / 60000);
+    const isHour = d.getMinutes() === 0;
+    const label = isHour
+      ? d.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true })
+      : d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).replace(/ (AM|PM)/, '');
 
-  // Check if H1 coincides with any cadence mark (within 3 mins)
-  const coincidesIdx = cadence.findIndex((c) => Math.abs(c - h1Offset) <= 3);
-
-  for (let i = 0; i < cadence.length; i++) {
-    const c = cadence[i];
-    const itemOffset = i === coincidesIdx ? h1Offset : c;
-    const itemLabel = i === coincidesIdx ? h1Label : (c === 60 ? '+1h' : `${c}m`);
-    const isClock = i === coincidesIdx;
-    const itemDate = i === coincidesIdx ? h1Date : new Date(nowMs + c * 60000);
-    const idxM = findClosestIndex(itemDate.getTime(), mTimes);
-
+    const idxM = findClosestIndex(curr, mTimes);
     points.push({
-      timeOffset: itemOffset,
-      timeLabel: itemLabel,
-      isClockHour: isClock,
+      timeOffset: offset,
+      timeLabel: label,
       temperature: data.minutely_15?.temperature_2m?.[idxM] ?? current.temp,
       feelsLike: data.minutely_15?.apparent_temperature?.[idxM] ?? current.feelsLike,
       humidity: data.minutely_15?.relative_humidity_2m?.[idxM] ?? current.humidity,
       precipitation: data.minutely_15?.precipitation?.[idxM] ?? 0,
     });
+    curr += 15 * 60000;
   }
 
-  // If H1 does not coincide with any 15-minute cadence mark, include it as an X-axis tick ONLY (no data point plotted)
-  if (coincidesIdx === -1 && h1Offset > 3 && h1Offset < 60) {
-    extraTicks.push({
-      timeOffset: h1Offset,
-      timeLabel: h1Label,
-      isClockHour: true,
-      temperature: current.temp,
-      feelsLike: current.feelsLike,
-      humidity: current.humidity,
-      precipitation: 0,
-    });
+  // Clock hours at their true time offset out to ~6 hours from Now
+  const lastGranularOffset = points[points.length - 1].timeOffset;
+  const startHourDate = new Date(nowMs);
+  startHourDate.setMinutes(0, 0, 0);
+
+  for (let h = 1; h <= 8; h++) {
+    const hourDate = new Date(startHourDate.getTime() + h * 3600000);
+    const offset = Math.round((hourDate.getTime() - nowMs) / 60000);
+    if (offset >= lastGranularOffset + 10 && offset <= 390) {
+      const label = hourDate.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true });
+      const idxH = findClosestIndex(hourDate.getTime(), hTimes);
+      points.push({
+        timeOffset: offset,
+        timeLabel: label,
+        temperature: data.hourly?.temperature_2m?.[idxH] ?? current.temp,
+        feelsLike: data.hourly?.apparent_temperature?.[idxH] ?? current.feelsLike,
+        humidity: data.hourly?.relative_humidity_2m?.[idxH] ?? current.humidity,
+        precipitation: data.hourly?.precipitation?.[idxH] ?? 0,
+      });
+    }
   }
 
-  // Subsequent clock hours (+2h to +6h from current hour)
-  for (let h = 2; h <= 6; h++) {
-    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours() + h, 0, 0);
-    const offset = Math.round((d.getTime() - nowMs) / 60000);
-    const label = d.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true });
-    const idxH = findClosestIndex(d.getTime(), hTimes);
-
-    points.push({
-      timeOffset: offset,
-      timeLabel: label,
-      isClockHour: true,
-      temperature: data.hourly?.temperature_2m?.[idxH] ?? current.temp,
-      feelsLike: data.hourly?.apparent_temperature?.[idxH] ?? current.feelsLike,
-      humidity: data.hourly?.relative_humidity_2m?.[idxH] ?? current.humidity,
-      precipitation: data.hourly?.precipitation?.[idxH] ?? 0,
-    });
-  }
-
-  return { timeline: points, extraTicks };
+  return points;
 }
 
 export default function Home() {
@@ -130,7 +118,7 @@ export default function Home() {
   const [weather, setWeather] = useState<WeatherState | null>(null);
   const [weatherBusy, setWeatherBusy] = useState(true);
   const [currTime, setCurrTime] = useState<number | null>(null);
-  const [nextRefresh, setNextRefresh] = useState<number | null>(null);
+  const [lastWeatherUpdate, setLastWeatherUpdate] = useState<number>(Date.now());
 
   const getWeather = useCallback(async () => {
     try {
@@ -156,13 +144,13 @@ export default function Home() {
         isDay: data.current.is_day === 1,
       };
 
-      const { timeline, extraTicks } = buildTimeline(current, data, now);
+      const timeline = buildTimeline(current, data, now);
 
       setWeather({
         current,
         timeline,
-        extraTicks,
       });
+      setLastWeatherUpdate(Date.now());
       setWeatherBusy(false);
     } catch (err) {
       console.error('Weather error:', err);
@@ -173,15 +161,17 @@ export default function Home() {
   useEffect(() => {
     const now = Date.now();
     setCurrTime(now);
-    setNextRefresh(now + refreshInterval);
     getWeather();
 
-    const intervalId = setInterval(() => {
-      const current = Date.now();
-      setCurrTime(current);
-      setNextRefresh((prev) => (prev && current > prev ? (getWeather(), current + refreshInterval) : prev));
+    const weatherTimer = setInterval(getWeather, refreshInterval);
+    const clockTimer = setInterval(() => {
+      setCurrTime(Date.now());
     }, 1000);
-    return () => clearInterval(intervalId);
+
+    return () => {
+      clearInterval(weatherTimer);
+      clearInterval(clockTimer);
+    };
   }, [getWeather, refreshInterval]);
 
   const iframeStyle: React.CSSProperties = {
@@ -192,7 +182,9 @@ export default function Home() {
     scrollbarWidth: 'none',
   };
 
-  const countdown = currTime && nextRefresh ? Math.max(0, Math.trunc((nextRefresh - currTime) / 1000)) : 60;
+  const elapsed = currTime ? Math.max(0, currTime - lastWeatherUpdate) : 0;
+  const countdown = Math.max(0, Math.ceil((refreshInterval - elapsed) / 1000));
+  const nextRefresh = lastWeatherUpdate + refreshInterval;
 
   return (
     <main>
@@ -230,7 +222,6 @@ export default function Home() {
             <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
               <WeatherCharts
                 timeline={weather.timeline}
-                extraTicks={weather.extraTicks}
                 currentTemp={weather.current.temp}
                 currentFeelsLike={weather.current.feelsLike}
                 currentHumidity={weather.current.humidity}

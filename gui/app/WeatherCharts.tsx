@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   ResponsiveContainer,
   LineChart,
@@ -18,7 +18,6 @@ import {
 export interface WeatherPoint {
   timeOffset: number;
   timeLabel: string;
-  isClockHour?: boolean;
   temperature: number;
   feelsLike: number;
   humidity: number;
@@ -27,7 +26,6 @@ export interface WeatherPoint {
 
 interface WeatherChartsProps {
   timeline: WeatherPoint[];
-  extraTicks?: WeatherPoint[];
   currentTemp: number;
   currentFeelsLike: number;
   currentHumidity: number;
@@ -219,7 +217,6 @@ function makeCollisionAwareLabelList(
 
 export default function WeatherCharts({
   timeline,
-  extraTicks,
   currentTemp,
   currentFeelsLike,
   currentHumidity,
@@ -249,72 +246,53 @@ export default function WeatherCharts({
     };
   }, [timeline]);
 
-  const { allTicks, tickMap, clockMap, domainMax } = useMemo(() => {
+  const { allTicks, tickMap, domainMax } = useMemo(() => {
     const ticks: number[] = [];
     const tMap: Record<number, string> = {};
-    const cMap: Record<number, boolean> = {};
 
     timeline.forEach((pt) => {
       ticks.push(pt.timeOffset);
       tMap[pt.timeOffset] = pt.timeLabel;
-      cMap[pt.timeOffset] = !!pt.isClockHour;
     });
-
-    if (extraTicks) {
-      extraTicks.forEach((pt) => {
-        if (!ticks.includes(pt.timeOffset)) {
-          ticks.push(pt.timeOffset);
-          tMap[pt.timeOffset] = pt.timeLabel;
-          cMap[pt.timeOffset] = true;
-        }
-      });
-    }
 
     ticks.sort((a, b) => a - b);
     const maxVal = Math.max(...ticks, 360);
 
+    // If the first non-zero tick is within 10 minutes of Now, suppress the "Now"
+    // label to prevent overlap — the data point still exists for the chart line.
+    const firstNonZero = ticks.find((t) => t > 0);
+    if (firstNonZero !== undefined && firstNonZero < 10) {
+      delete tMap[0];
+    }
+
     return {
       allTicks: ticks,
       tickMap: tMap,
-      clockMap: cMap,
       domainMax: maxVal + 12,
     };
-  }, [timeline, extraTicks]);
+  }, [timeline]);
 
-  const renderCustomTick = (props: any) => {
+  const renderCustomTick = useCallback((props: any) => {
     const { x, y, payload } = props;
     const label = tickMap[payload.value];
     if (!label) return null;
-    const isClock = clockMap[payload.value];
+    const isHourOrNow = label === 'Now' || label.endsWith('AM') || label.endsWith('PM');
 
     return (
       <g transform={`translate(${x},${y})`}>
-        {isClock ? (
-          <text
-            x={0}
-            y={20}
-            textAnchor="middle"
-            fill="#f4f4f5"
-            fontSize={14}
-            fontWeight={800}
-          >
-            {label}
-          </text>
-        ) : (
-          <text
-            x={0}
-            y={6}
-            textAnchor="middle"
-            fill="#38bdf8"
-            fontSize={13}
-            fontWeight={700}
-          >
-            {label}
-          </text>
-        )}
+        <text
+          x={0}
+          y={16}
+          textAnchor="middle"
+          fill={isHourOrNow ? '#f4f4f5' : '#38bdf8'}
+          fontSize={13}
+          fontWeight={800}
+        >
+          {label}
+        </text>
       </g>
     );
-  };
+  }, [tickMap]);
 
   // Stable label renderers: recreated only when timeline changes (not on every 1s clock tick).
   // Each uses makeCollisionAwareLabelList which accumulates positions from index 0 to N
@@ -455,145 +433,195 @@ export default function WeatherCharts({
       </div>
 
       {/* Static Charts Container: Dynamic 2 or 3 charts depending on rain */}
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          display: 'grid',
-          gridTemplateColumns: hasRainExpected ? 'repeat(3, 1fr)' : '1fr 1fr',
-          gap: 0,
-          marginTop: 4,
-          pointerEvents: 'none',
-        }}
-      >
-        {/* Chart 1: Temperature & Real Feel */}
-        <ChartCard
-          borderRight={true}
-          title={
-            <>
-              <span style={{ color: '#fb923c', fontWeight: 700 }}>● Temp (°F)</span>
-              <span style={{ color: '#38bdf8', fontWeight: 700 }}>╌ Real Feel (°F)</span>
-            </>
-          }
-        >
-          <LineChart data={timeline} margin={{ ...chartMargin, bottom: 2 }}>
-            {commonGrid}
-            <XAxis
-              type="number"
-              dataKey="timeOffset"
-              domain={[-10, domainMax]}
-              ticks={allTicks}
-              tick={renderCustomTick}
-              axisLine={{ stroke: '#3f3f46' }}
-              interval={0}
-              height={36}
-            />
-            <YAxis {...commonYAxis} domain={tempDomain} tickFormatter={(v: number) => `${v}°`} />
-            <Line
-              type="monotone"
-              dataKey="temperature"
-              stroke="#fb923c"
-              strokeWidth={3}
-              dot={{ r: 3.5, fill: '#fb923c' }}
-              activeDot={false}
-              isAnimationActive={false}
-            >
-              <LabelList content={renderTempLabel} />
-            </Line>
-            <Line
-              type="monotone"
-              dataKey="feelsLike"
-              stroke="#38bdf8"
-              strokeWidth={2.2}
-              strokeDasharray="4 3"
-              dot={{ r: 3, fill: '#38bdf8' }}
-              activeDot={false}
-              isAnimationActive={false}
-            >
-              <LabelList content={renderFeelsLikeLabel} />
-            </Line>
-          </LineChart>
-        </ChartCard>
-
-        {/* Chart 2: Humidity */}
-        <ChartCard borderRight={hasRainExpected} title={<span style={{ color: '#22d3ee', fontWeight: 700 }}>💧 Humidity (%)</span>}>
-          <AreaChart data={timeline} margin={{ ...chartMargin, bottom: 2 }}>
-            <defs>
-              <linearGradient id="humGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.45} />
-                <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.05} />
-              </linearGradient>
-            </defs>
-            {commonGrid}
-            <XAxis
-              type="number"
-              dataKey="timeOffset"
-              domain={[-10, domainMax]}
-              ticks={allTicks}
-              tick={renderCustomTick}
-              axisLine={{ stroke: '#3f3f46' }}
-              interval={0}
-              height={36}
-            />
-            <YAxis {...commonYAxis} domain={humDomain} tickFormatter={(v: number) => `${v}%`} />
-            <Area
-              type="monotone"
-              dataKey="humidity"
-              stroke="#06b6d4"
-              strokeWidth={2.4}
-              fill="url(#humGrad)"
-              dot={{ r: 3.5, fill: '#06b6d4' }}
-              activeDot={false}
-              isAnimationActive={false}
-            >
-              <LabelList content={renderHumidityLabel} />
-            </Area>
-          </AreaChart>
-        </ChartCard>
-
-        {/* Chart 3: Precipitation Totals (Only rendered when rain is expected) */}
-        {hasRainExpected && (
-          <ChartCard
-            borderRight={false}
-            title={
-              <>
-                <span style={{ color: '#60a5fa', fontWeight: 700 }}>🌧️ Precip (in)</span>
-                <span style={{ color: totalPrecip > 0 ? '#93c5fd' : '#a1a1aa', fontWeight: 600 }}>
-                  Total: {totalPrecip.toFixed(2)}&quot;
-                </span>
-              </>
-            }
-          >
-            <BarChart data={timeline} margin={{ ...chartMargin, bottom: 2 }}>
-              {commonGrid}
-              <XAxis
-                type="number"
-                dataKey="timeOffset"
-                domain={[-10, domainMax]}
-                ticks={allTicks}
-                tick={renderCustomTick}
-                axisLine={{ stroke: '#3f3f46' }}
-                interval={0}
-                height={36}
-              />
-              <YAxis
-                {...commonYAxis}
-                domain={[0, maxPrecip]}
-                tickFormatter={(v: number) => `${v.toFixed(2)}"`}
-              />
-              <Bar
-                dataKey="precipitation"
-                fill="#3b82f6"
-                radius={[3, 3, 0, 0]}
-                barSize={14}
-                isAnimationActive={false}
-              >
-                <LabelList content={renderPrecipLabel} />
-              </Bar>
-            </BarChart>
-          </ChartCard>
-        )}
-      </div>
+      <ChartGrid
+        timeline={timeline}
+        allTicks={allTicks}
+        domainMax={domainMax}
+        tempDomain={tempDomain}
+        humDomain={humDomain}
+        maxPrecip={maxPrecip}
+        totalPrecip={totalPrecip}
+        hasRainExpected={hasRainExpected}
+        renderTempLabel={renderTempLabel}
+        renderFeelsLikeLabel={renderFeelsLikeLabel}
+        renderHumidityLabel={renderHumidityLabel}
+        renderPrecipLabel={renderPrecipLabel}
+        renderCustomTick={renderCustomTick}
+      />
     </div>
   );
 }
+
+interface ChartGridProps {
+  timeline: WeatherPoint[];
+  allTicks: number[];
+  domainMax: number;
+  tempDomain: [number, number];
+  humDomain: [number, number];
+  maxPrecip: number;
+  totalPrecip: number;
+  hasRainExpected: boolean;
+  renderTempLabel: any;
+  renderFeelsLikeLabel: any;
+  renderHumidityLabel: any;
+  renderPrecipLabel: any;
+  renderCustomTick: any;
+}
+
+const ChartGrid = React.memo(function ChartGrid({
+  timeline,
+  allTicks,
+  domainMax,
+  tempDomain,
+  humDomain,
+  maxPrecip,
+  totalPrecip,
+  hasRainExpected,
+  renderTempLabel,
+  renderFeelsLikeLabel,
+  renderHumidityLabel,
+  renderPrecipLabel,
+  renderCustomTick,
+}: ChartGridProps) {
+  return (
+    <div
+      style={{
+        flex: 1,
+        minHeight: 0,
+        display: 'grid',
+        gridTemplateColumns: hasRainExpected ? 'repeat(3, 1fr)' : '1fr 1fr',
+        gap: 0,
+        marginTop: 4,
+        pointerEvents: 'none',
+      }}
+    >
+      {/* Chart 1: Temperature & Real Feel */}
+      <ChartCard
+        borderRight={true}
+        title={
+          <>
+            <span style={{ color: '#fb923c', fontWeight: 700 }}>● Temp (°F)</span>
+            <span style={{ color: '#38bdf8', fontWeight: 700 }}>╌ Real Feel (°F)</span>
+          </>
+        }
+      >
+        <LineChart data={timeline} margin={{ ...chartMargin, bottom: 2 }}>
+          {commonGrid}
+          <XAxis
+            type="number"
+            dataKey="timeOffset"
+            domain={[-10, domainMax]}
+            ticks={allTicks}
+            tick={renderCustomTick}
+            axisLine={{ stroke: '#3f3f46' }}
+            interval={0}
+            height={36}
+          />
+          <YAxis {...commonYAxis} domain={tempDomain} tickFormatter={(v: number) => `${v}°`} />
+          <Line
+            type="monotone"
+            dataKey="temperature"
+            stroke="#fb923c"
+            strokeWidth={3}
+            dot={{ r: 3.5, fill: '#fb923c' }}
+            activeDot={false}
+            isAnimationActive={false}
+          >
+            <LabelList content={renderTempLabel} />
+          </Line>
+          <Line
+            type="monotone"
+            dataKey="feelsLike"
+            stroke="#38bdf8"
+            strokeWidth={2.2}
+            strokeDasharray="4 3"
+            dot={{ r: 3, fill: '#38bdf8' }}
+            activeDot={false}
+            isAnimationActive={false}
+          >
+            <LabelList content={renderFeelsLikeLabel} />
+          </Line>
+        </LineChart>
+      </ChartCard>
+
+      {/* Chart 2: Humidity */}
+      <ChartCard borderRight={hasRainExpected} title={<span style={{ color: '#22d3ee', fontWeight: 700 }}>💧 Humidity (%)</span>}>
+        <AreaChart data={timeline} margin={{ ...chartMargin, bottom: 2 }}>
+          <defs>
+            <linearGradient id="humGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.45} />
+              <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.05} />
+            </linearGradient>
+          </defs>
+          {commonGrid}
+          <XAxis
+            type="number"
+            dataKey="timeOffset"
+            domain={[-10, domainMax]}
+            ticks={allTicks}
+            tick={renderCustomTick}
+            axisLine={{ stroke: '#3f3f46' }}
+            interval={0}
+            height={36}
+          />
+          <YAxis {...commonYAxis} domain={humDomain} tickFormatter={(v: number) => `${v}%`} />
+          <Area
+            type="monotone"
+            dataKey="humidity"
+            stroke="#06b6d4"
+            strokeWidth={2.4}
+            fill="url(#humGrad)"
+            dot={{ r: 3.5, fill: '#06b6d4' }}
+            activeDot={false}
+            isAnimationActive={false}
+          >
+            <LabelList content={renderHumidityLabel} />
+          </Area>
+        </AreaChart>
+      </ChartCard>
+
+      {/* Chart 3: Precipitation Totals (Only rendered when rain is expected) */}
+      {hasRainExpected && (
+        <ChartCard
+          borderRight={false}
+          title={
+            <>
+              <span style={{ color: '#60a5fa', fontWeight: 700 }}>🌧️ Precip (in)</span>
+              <span style={{ color: totalPrecip > 0 ? '#93c5fd' : '#a1a1aa', fontWeight: 600 }}>
+                Total: {totalPrecip.toFixed(2)}&quot;
+              </span>
+            </>
+          }
+        >
+          <BarChart data={timeline} margin={{ ...chartMargin, bottom: 2 }}>
+            {commonGrid}
+            <XAxis
+              type="number"
+              dataKey="timeOffset"
+              domain={[-10, domainMax]}
+              ticks={allTicks}
+              tick={renderCustomTick}
+              axisLine={{ stroke: '#3f3f46' }}
+              interval={0}
+              height={36}
+            />
+            <YAxis
+              {...commonYAxis}
+              domain={[0, maxPrecip]}
+              tickFormatter={(v: number) => `${v.toFixed(2)}"`}
+            />
+            <Bar
+              dataKey="precipitation"
+              fill="#3b82f6"
+              radius={[3, 3, 0, 0]}
+              barSize={14}
+              isAnimationActive={false}
+            >
+              <LabelList content={renderPrecipLabel} />
+            </Bar>
+          </BarChart>
+        </ChartCard>
+      )}
+    </div>
+  );
+});
