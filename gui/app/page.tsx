@@ -18,8 +18,8 @@ interface WeatherState {
 }
 
 const BUS_STOPS = [
-  { title: 'Northwest', stopId: '8929,945,15847', bg: '335f4c', name: 'North & West (Away from city)' },
-  { title: 'Southeast', stopId: '8849,898,5481', bg: '5f333b', name: 'South & East (City center)' },
+  { title: 'Northwest', stopId: '8929,945,15847', bg: '335f4c', name: 'North/West (Away from city)' },
+  { title: 'Southeast', stopId: '8849,898,5481', bg: '5f333b', name: 'South/East (City center)' },
 ];
 
 function buildTimeline(
