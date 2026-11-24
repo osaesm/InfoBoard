@@ -87,7 +87,11 @@ function buildTimeline(
     curr += 15 * 60000;
   }
 
-  // Clock hours at their true time offset out to ~6 hours from Now
+  // Clock hours at their true time offset out to ~6 hours from Now.
+  // Build a set of offsets already emitted by the granular loop so we never
+  // create a second data point (and therefore a second X-axis tick / label)
+  // for the same clock hour — the main cause of "ghosted" hour labels.
+  const usedOffsets = new Set(points.map((p) => p.timeOffset));
   const lastGranularOffset = points[points.length - 1].timeOffset;
   const startHourDate = new Date(nowMs);
   startHourDate.setMinutes(0, 0, 0);
@@ -95,7 +99,7 @@ function buildTimeline(
   for (let h = 1; h <= 8; h++) {
     const hourDate = new Date(startHourDate.getTime() + h * 3600000);
     const offset = Math.round((hourDate.getTime() - nowMs) / 60000);
-    if (offset >= lastGranularOffset + 10 && offset <= 390) {
+    if (offset >= lastGranularOffset + 10 && offset <= 390 && !usedOffsets.has(offset)) {
       const label = hourDate.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true });
       const idxH = findClosestIndex(hourDate.getTime(), hTimes);
       points.push({
@@ -106,6 +110,7 @@ function buildTimeline(
         humidity: data.hourly?.relative_humidity_2m?.[idxH] ?? current.humidity,
         precipitation: data.hourly?.precipitation?.[idxH] ?? 0,
       });
+      usedOffsets.add(offset);
     }
   }
 
@@ -232,6 +237,7 @@ export default function Home() {
                 isDay={weather.current.isDay}
                 currTime={currTime}
                 countdown={countdown}
+                lastWeatherUpdate={lastWeatherUpdate}
               />
             </div>
           ) : (

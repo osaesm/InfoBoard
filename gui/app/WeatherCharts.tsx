@@ -36,6 +36,7 @@ interface WeatherChartsProps {
   isDay: boolean;
   currTime?: number | null;
   countdown?: number;
+  lastWeatherUpdate?: number;
 }
 
 function getWeatherInfo(code: number, isDay: boolean): { desc: string; icon: string } {
@@ -227,6 +228,7 @@ export default function WeatherCharts({
   isDay,
   currTime,
   countdown,
+  lastWeatherUpdate,
 }: WeatherChartsProps) {
   const [mounted, setMounted] = useState(false);
 
@@ -247,15 +249,15 @@ export default function WeatherCharts({
   }, [timeline]);
 
   const { allTicks, tickMap, domainMax } = useMemo(() => {
-    const ticks: number[] = [];
+    const tickSet = new Set<number>();
     const tMap: Record<number, string> = {};
 
     timeline.forEach((pt) => {
-      ticks.push(pt.timeOffset);
+      tickSet.add(pt.timeOffset);
       tMap[pt.timeOffset] = pt.timeLabel;
     });
 
-    ticks.sort((a, b) => a - b);
+    const ticks = Array.from(tickSet).sort((a, b) => a - b);
     const maxVal = Math.max(...ticks, 360);
 
     // If the first non-zero tick is within 10 minutes of Now, suppress the "Now"
@@ -434,6 +436,7 @@ export default function WeatherCharts({
 
       {/* Static Charts Container: Dynamic 2 or 3 charts depending on rain */}
       <ChartGrid
+        key={lastWeatherUpdate ?? 0}
         timeline={timeline}
         allTicks={allTicks}
         domainMax={domainMax}
