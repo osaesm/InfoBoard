@@ -4,23 +4,32 @@
 
 ## The overall structure
 
-- `api/` contains the code for an ExpressJS server
-- `gui/` contains the code for a NextJS GUI
-- `Dockerfile.api` is the dockerfile for the API's container
-- `Dockerfile.gui` is the dockerfile for the GUI's container
-- There are 3 `.env` files you need from me:
-    - `.env`
-    - `api/.env`
-    - `gui/.env.local`
+InfoBoard is a Next.js 16 application that consolidates the dashboard GUI and API proxy into a single unified service:
 
-## Running the GUI
+- `gui/` contains the code for the Next.js GUI and internal Route Handlers
+  - `gui/app/page.tsx` — Main dashboard layout (weather header, time-series charts, transit frames)
+  - `gui/app/WeatherCharts.tsx` — Weather charts & current condition header
+  - `gui/app/api/health/route.ts` — API health check endpoint (`GET /api/health`)
+  - `gui/app/api/weather/forecast/route.ts` — Open-Meteo weather forecast proxy (`GET /api/weather/forecast`)
+- `Dockerfile.gui` is the container definition for the application
+- Environment variables:
+  - `gui/.env.local` (or root `.env`):
+    - `NEXT_PUBLIC_LATITUDE` / `LATITUDE`
+    - `NEXT_PUBLIC_LONGITUDE` / `LONGITUDE`
 
-1. To set up the GUI locally, `cd` into `gui/` and run `npm i`.
-2. The main code for the GUI is in `gui/app/page.tsx`.
-3. To run the GUI locally, from `gui/`, run `npm run dev` and go to `localhost:3000`. (If you're not on our home network, you'll also have to run your own server instance, which I'll go over next).
+## Running InfoBoard
 
-## Running the API
-
-1. To set up the API locally, `cd` into `api/` and run `npm i`
-2. The main code for the api is in `api/server.js`
-3. To run the API locally, from `api/`, run `node server.js`. You also have to make a change to `gui/.env.local` (set `NEXT_PUBLIC_HOST_URL='localhost:<port>'` [default port for API is `2399`])
+1. To set up locally, `cd` into `gui/` and run `npm i`.
+2. To run the development server:
+   ```bash
+   npm run dev
+   ```
+   Open `http://localhost:3000` in your browser.
+3. To test the API route handlers directly:
+   - Health check: `curl http://localhost:3000/api/health`
+   - Forecast: `curl "http://localhost:3000/api/weather/forecast?latitude=41.9095&longitude=-87.6778"`
+4. Production build:
+   ```bash
+   npm run build
+   npm start
+   ```

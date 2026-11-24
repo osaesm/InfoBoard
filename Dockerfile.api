@@ -1,9 +1,0 @@
-FROM node:20.16-slim
-WORKDIR /usr/src/app
-COPY api/package*.json .
-RUN npm ci --omit=dev
-COPY api/* .
-
-EXPOSE 2399
-
-CMD ["node", "server.js"]

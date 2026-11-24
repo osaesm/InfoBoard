@@ -62,31 +62,26 @@ flowchart TD
 InfoBoard/
 ├── GEMINI.md               # This agent instruction manual
 ├── README.md               # User-facing setup & run guide
-├── Dockerfile.api          # Container definition for Express API
-├── Dockerfile.gui          # Container definition for Next.js GUI
+├── Dockerfile.gui          # Container definition for Next.js GUI & API
 ├── .dockerignore
 ├── .env                    # Shared root fallback environment variables (LATITUDE, LONGITUDE)
 ├── .eslintrc.json
 ├── .gitignore
 ├── tsconfig.json           # Root TypeScript configuration
 │
-├── api/                    # Express.js backend proxy
-│   ├── .env                # API-specific env: PORT_NUMBER, LATITUDE, LONGITUDE
-│   ├── package.json        # Dependencies: express, cors, dotenv
-│   ├── package-lock.json
-│   └── server.js           # API server: /health & /weather/forecast (Open-Meteo proxy)
-│
-└── gui/                    # Next.js 16 frontend application
-    ├── .env.local          # GUI env: NEXT_PUBLIC_HOST_URL, NEXT_PUBLIC_LATITUDE, NEXT_PUBLIC_LONGITUDE
+└── gui/                    # Next.js 16 application (GUI & API Route Handlers)
+    ├── .env.local          # GUI env: NEXT_PUBLIC_LATITUDE, NEXT_PUBLIC_LONGITUDE
     ├── next.config.js      # Next.js config (reactStrictMode: false)
-    ├── package.json        # Dependencies: next 16, react 19, recharts 2, sharp, dotenv
+    ├── package.json        # Dependencies: next 16, react 19, recharts 2
     ├── tsconfig.json       # GUI TypeScript config
     └── app/
         ├── layout.tsx      # Root HTML layout (bare body wrapper; metadata only)
         ├── globals.css     # Minimal CSS: body { background #373435; color #fff; margin 0 }
-        ├── page.module.css # CSS Module file — currently UNUSED; ignore it
         ├── page.tsx        # Main dashboard: grid layout, weather fetch loop, buildTimeline()
-        └── WeatherCharts.tsx # All weather UI: header bar, Recharts charts, React.memo(ChartGrid)
+        ├── WeatherCharts.tsx # Weather UI: header bar, Recharts charts, React.memo(ChartGrid)
+        └── api/            # Consolidated Next.js Route Handlers
+            ├── health/route.ts            # GET /api/health
+            └── weather/forecast/route.ts  # GET /api/weather/forecast (Open-Meteo proxy)
 ```
 
 ---
@@ -95,22 +90,7 @@ InfoBoard/
 
 All commands must be run with `BypassSandbox: true` and the Node PATH prefix.
 
-### Express API (`api/`)
-```bash
-# Install dependencies
-PATH="/home/osama/.nvm/versions/node/v22.17.1/bin:$PATH" npm --prefix api install
-
-# Start the API server (default port 2399)
-PATH="/home/osama/.nvm/versions/node/v22.17.1/bin:$PATH" node api/server.js
-
-# Health check
-curl -s http://localhost:2399/health
-
-# Forecast spot-check (first 200 bytes)
-curl -s "http://localhost:2399/weather/forecast" | head -c 200
-```
-
-### Next.js GUI (`gui/`)
+### Next.js GUI & Route Handlers (`gui/`)
 ```bash
 # Install dependencies
 PATH="/home/osama/.nvm/versions/node/v22.17.1/bin:$PATH" npm --prefix gui install
@@ -126,6 +106,10 @@ PATH="/home/osama/.nvm/versions/node/v22.17.1/bin:$PATH" npm --prefix gui start
 
 # Lint
 PATH="/home/osama/.nvm/versions/node/v22.17.1/bin:$PATH" npm --prefix gui run lint
+
+# Spot-check health and forecast API routes
+curl -s http://localhost:3000/api/health
+curl -s "http://localhost:3000/api/weather/forecast" | head -c 200
 ```
 
 > [!TIP]
@@ -139,20 +123,20 @@ PATH="/home/osama/.nvm/versions/node/v22.17.1/bin:$PATH" npm --prefix gui run li
 sequenceDiagram
     autonumber
     participant OM as Open-Meteo API
-    participant API as Express API (:2399)
+    participant Route as Next.js Route Handler (/api/weather/forecast)
     participant Page as GUI page.tsx (:3000)
     participant WC as WeatherCharts.tsx
     participant CG as React.memo(ChartGrid)
 
     Note over Page: Every 60 seconds (refreshInterval = 60 * 1000)
-    Page->>API: GET /weather/forecast?latitude=...&longitude=...
-    API->>OM: GET https://api.open-meteo.com/v1/forecast?...
-    OM-->>API: minutely_15 + hourly + current JSON
-    API-->>Page: Weather payload
+    Page->>Route: GET /api/weather/forecast?latitude=...&longitude=...
+    Route->>OM: GET https://api.open-meteo.com/v1/forecast?...
+    OM-->>Route: minutely_15 + hourly + current JSON
+    Route-->>Page: Weather payload
     Page->>Page: buildTimeline(current, data, now)
-    Page->>WC: Pass timeline + current conditions props
-    WC->>CG: Pass memoized domain, ticks & renderers
-    Note over CG: Re-renders SVGs ONLY when weather data changes
+    Page->>WC: Pass timeline + current object
+    WC->>CG: Pass timeline + currentPrecip
+    Note over CG: Calculates domains/renderers & re-renders SVGs ONLY when weather data changes
 
     Note over Page: Every 1 second
     Page->>Page: setCurrTime(Date.now())
@@ -273,4 +257,4 @@ Located in the bottom row (60dvh) of `gui/app/page.tsx`. All transit UI is ifram
 | Running commands without `BypassSandbox: true` | Standard sandbox hits `operation not permitted` on the `agy` executable. | Always set `BypassSandbox: true` in `run_command`. |
 | Invoking `git commit` or `git push` | User explicitly prefers verifying fixes in-situ before committing. | Run `npm run build`, report results, and await explicit user approval. |
 | Forcing fixed pixel heights (`px`) on outer containers | Breaks the fixed 1080p kiosk layout on zoom or screen size changes. | Use `dvh`/`dvw` for the grid; use `flex: 1` + `minHeight: 0` for inner flex children. |
-| Editing `page.module.css` | File is present but entirely unused — no component imports it. | Leave it alone; all styles are inline or in `globals.css`. |
+| Relying on external Express server | Express API was consolidated into Next.js Route Handlers (`/api/weather/forecast`). | Use internal route handlers directly at `/api/weather/forecast`. |
