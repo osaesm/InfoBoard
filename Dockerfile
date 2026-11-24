@@ -1,8 +1,8 @@
 FROM node:20.16 AS builder
 WORKDIR /usr/src/app
-COPY gui/package*.json ./
+COPY package*.json ./
 RUN npm ci
-COPY gui .
+COPY . .
 RUN npm run build
 
 FROM node:20.16-slim
